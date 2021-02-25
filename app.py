@@ -1,3 +1,23 @@
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.svm import SVC
+from sklearn.linear_model import SGDClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_validate
+import base64
+from pathlib import Path
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+import plotly.figure_factory as ff
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import learning_curve
+from sklearn.metrics import confusion_matrix, classification_report
+import pickle
+from sklearn.model_selection import train_test_split
+import time
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -7,236 +27,749 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
-import time
+# --------------------------------------------
+
 
 @st.cache
-def load_data(DATA_URL):
-    data = pd.read_csv(DATA_URL)
-    # lowercase = lambda x: str(x).lower()
-    # data.rename(lowercase, axis='columns', inplace=True)
-    # data[DATE_COLUMN] = pd.to_datetime(data[DATE_COLUMN])
-    return data
-
-def main():
-    """Common Machine Learning EDA"""
-    
-    st.sidebar.markdown("""
-    <h2 style="font-size: 30px; color:#1F85DE" >Objectif : </h2>
-    """, unsafe_allow_html=True)
-
-    st.sidebar.markdown("""
-
-        - `Objectif` : ``Comprendre notre dataset``
-
-        **Visualisation de la target** :
-        - Notre dataset n'est pas equilibré 
-        - 79,6% n'ont pas churner
-        - 20,4% ont churner
-        - Il faut utiliser des metriques comme le `F1-Score`, la `precision` ou le `Recall`ou l'analyse `smote` pour regler le probleme des classes desiquilibrées
-    
-        **Signification des variables** :
-         - **Variable categorique**
-        - France : 51,1%
-        - Germany : 25,1%
-        - Spain : 24,8%
- 
-        - **Relation Variables / Target** :        
-            - Nos données n'ont pas été normalisée, mais ils ont l'aire de suivre une loi normale.
-            - Il semblerait que l'age joue sur le churn : ``(hypothese)``
-            - Les hommes sont plus representé que les femmes et la banque a beaucoup de client en France/
-            - Les clients qui sont en Allemagne churn le plus. 
-            - Les femmes churn plus que les hommes. 
-        
-        ## Analyse plus détaillée
-
-        - **Relation Variables / Variables** :
-            - On voit que certain variable sont tres fortement correlé
-        
-        ### hypotheses nulle (H0): 
-        - **Resultat de l'analyse: **
-            - Les individues qui churn le plus sont agés entre 40 et 60 ans
-            - H0 : le taux de churn moyen est egale dans tout les tranches d'ages
-                - Cette hypothese est rejetés. Donc l'age a un effet important sur le churn et ceux qui churn le plus son entre 40 et 60 ans 
-
-    """)
+def load_data(uploaded, separateur):
+    return pd.read_csv(uploaded, sep=separateur)
 
 
-    st.markdown("""
-    <h1 style="font-size: 50px; color:#DE781F" >Probleme understanding</h1>
-    """, unsafe_allow_html=True)
-    st.markdown("""
-        Le churn ou attrition est un phénomène qui désigne la résiliation d’un forfait ou d’un contrat qui lie un client à une entreprise. A ce titre, le churn est un indicateur clé pour calculer la satisfaction de la clientèle.
-        Dans cette exercice, on dispose des données d'une banque virtuelle qui a remarquée que beaucoup de ses clients quittés la banque.
-        L'ojectif est donc de comprendre le phenomeme qui améne ses clients à quitter la banque et pour cela, on dispose d'un dataset contenant une colonne nous informant si le client à quitter la banque ou non.
+def customized_plot(type_of_plot, columns, data, target, bins=0):
 
-        ## Description du jeu de donnée
+    if type_of_plot == "Bar":
+        fig = px.bar(data_frame=data, x=columns[0], y=columns[1],
+                     width=620, height=420, barmode="relative")
+        st.plotly_chart(fig)
 
-        - `RowNumber`: le numero de la ligne de donnée
-        - `CustomerId`: identifiant du client
-        - `Surname`: Surnom du client
-        - `CreditScore`: Le score de credit nous donne une idée de la capacité de remboursement d'un client
-        - `Geography`: nom du pays de provenance du client
-        - `Gender`: Le genre du client
-        - `Age`: L'age du client
-        - `Tenure`: Nombre d'année depuis laquelle la personne est presente dans la banque
-        - `Balance`: Quantité d'argent qui est sur le compte du client
-        - `NumOfProducts`: Nombre de produit que le client a dans la banque
-        - `HasCrCard`: Si le client a une carte de credit ou non
-        - `IsActiveMember`: Designe si le client est un membre actif de la banque
-        - `EstimatedSalary`: Le salaire estimé de chaque client 
-        - `Exited`: la colonne Target qu'il nous faut predire la valeur
+    if type_of_plot == "Countplot":
+        fig, ax = plt.subplots()
+        fig = plt.figure(figsize=(16, 9))
+        ax = sns.countplot(x=columns, data=data, hue=target)
+        st.pyplot(fig)
 
-        ## Methode de travail
+        fig2, ax2 = plt.subplots()
+        ax2 = sns.heatmap(pd.crosstab(
+            data.target, data[columns], normalize='columns'), annot=True)
+        st.pyplot(fig2)
 
-        Pour regler le probleme, on va suivre une methode de travail qui va nous permettre d'atteindre les objectifs.
+    if type_of_plot == "Boxplot":
+        if len(columns) > 1:
+            fig = px.box(data_frame=data, x=columns[0], y=columns[1])
+        else:
+            fig = px.box(data_frame=data, y=columns,
+                         width=620, height=420,  orientation="v")
 
-        ### 1. Analyse Exploratoire des données
-        ### 2. Pré-traitement des données
-        ### 3. Modelisation
-        ### 4. Evaluation du modele
-        ### 5. Mise en production avec une API flask
-    """)
-    st.title("1. Exploratory Data Analysis")
-    st.subheader("In this part of our App, we'll explore our data with streamlit.")
+        st.plotly_chart(fig)
 
-    # EDA_button = st.button('Let\'s begin ...')
+    if type_of_plot == "Histogram":
+        fig = px.histogram(data_frame=data, x=columns,
+                           nbins=int(bins), width=620, height=420)
+        st.plotly_chart(fig)
 
-    def file_selector(folder_path='./datasets'):
-        filenames = os.listdir(folder_path)
-        selected_filename = st.selectbox("select a file", filenames)
-
-        return os.path.join(folder_path, selected_filename)
-
-    filename = file_selector()
-    st.info("loading ... "+filename)
-    data = load_data(filename)
-    st.success('Your data has been loaded succesfully :smile:')
-    # st.balloons()
-    # time.sleep(1)
-    # st.text("Let's continue ...")
-
-    # st.help(st.multiselect)
-    # show the data
-    if st.checkbox("Show Dataset"):
-        # st.text("Hello world")
-        number = st.number_input("Number of row to view", 5, 100, 5)
-        "Raw Data", data.head(number)
-    
-    # Show columns
-    if st.checkbox("Show Columns details"):
-        "Dataset Details"
-        st.write(data.dtypes)
-    
-    # Show data shape
-    if st.checkbox("Show our Shape"):
-        "Dataset shape"
-        data.shape
-
-    # Select columns
-    if st.checkbox("Select some columns"):
-        selected_columns = st.multiselect("Select", list(data.columns), default=['RowNumber'])
-        data[selected_columns]
-        if 'Exited' not in selected_columns:
+    if type_of_plot == "Distribution":
+        if target not in columns:
             st.subheader("distribution curve")
-            for col in selected_columns:
+            for col in columns:
                 if str(data[col].dtypes) == 'object':
-                    st.text("Can't display the distribution plot of a categorical variable") 
+                    st.text(
+                        "Can't display the distribution plot of a categorical variable")
                 else:
                     fig, ax = plt.subplots()
                     fig = plt.figure(figsize=(12, 8))
-                    ax = plt.axvline(x=data[col].quantile(q=0.25), c='C1',linestyle=':')
-                    ax = plt.axvline(x=data[col].quantile(q=0.75), c='C1',linestyle=':')
+                    ax = plt.axvline(x=data[col].quantile(
+                        q=0.25), c='C1', linestyle=':')
+                    ax = plt.axvline(x=data[col].quantile(
+                        q=0.75), c='C1', linestyle=':')
                     ax = plt.axvline(x=data[col].mean(), c='C1')
-                    ax = plt.axvline(x=data[col].median(), c='C1',linestyle='--')
+                    ax = plt.axvline(
+                        x=data[col].median(), c='C1', linestyle='--')
 
-                    ax = plt.hist(data[col], bins=100, histtype='step', density=True)
+                    ax = plt.hist(data[col], bins=100,
+                                  histtype='step', density=True)
                     ax = data[col].plot.density(bw_method=0.5)
+
                     plt.legend()
                     st.pyplot(fig)
         else:
             st.subheader("distribution curve between target and variable")
-            for col in selected_columns:
+            for col in columns:
                 if str(data[col].dtypes) == 'object':
-                    st.text("Can't display the distribution plot of a categorical variable") 
+                    st.text(
+                        "Can't display the distribution plot of a categorical variable")
                 else:
                     fig, ax = plt.subplots()
                     fig = plt.figure(figsize=(16, 9))
-                    ax = sns.distplot(data[data['Exited']==1][col], label="Exited")
-                    ax = sns.distplot(data[data['Exited']==0][col], label="Stayed")
+                    ax = sns.distplot(
+                        data[data['Exited'] == 1][col], label="Exited")
+                    ax = sns.distplot(
+                        data[data['Exited'] == 0][col], label="Stayed")
                     plt.legend()
                     st.pyplot(fig)
 
 
-    # show values
-    if st.button('Value Counts for the Target Variable'):
-        st.text('Value Counts By Target/Class')
-        st.write(data['Exited'].value_counts(normalize=True))
-        st.subheader("Pie chart")
-        fig, ax = plt.subplots()
-        st.write(data.iloc[:, -1].value_counts().plot.pie())
-        ax = data.iloc[:, -1].value_counts().plot.pie(autopct='%.1f%%', labels = ['Stayed', 'Exited'], figsize =(5,5), 
-                                                  fontsize = 10)
-        plt.title('Statistique de Churn', fontsize = 11)
-  
-        st.pyplot(fig)
+def target_info(data, target):
+    st.text('Value Counts By Target/Class')
+    st.write(data[target].value_counts(normalize=True))
+    fig, ax = plt.subplots()
+    st.write(data.iloc[:, -1].value_counts().plot.pie())
+    ax = data.iloc[:, -1].value_counts().plot.pie(autopct='%.1f%%', labels=['Stayed', 'Exited'], figsize=(3, 3),
+                                                  fontsize=6)
+    plt.title('Statistic of Churn', fontsize=8)
+    st.pyplot(fig)
 
-    # Show some Stats
-    if st.button('Some Stats !!'):
-        st.write(data.describe())
+    return data[target].value_counts(normalize=True)
 
-    # Visualization
 
-    # customized plot
-    st.subheader("Data Visualization")
-    type_of_plot = st.selectbox("Select type of plot", ["bar", "area", "line", "hist", "boxplot", "kde"])
-    selected_columns_names = st.multiselect("Select a colomn", data.columns.tolist())
-    if st.button('Generate Plot'):
-        st.success(f"Generating {type_of_plot} plot for {selected_columns_names}")
+def core(df, features, target, model, cv, length):
+    train = df[:int(len(df)*(length[1]*0.01))]
+    test = df[int(len(df)*(length[1]*0.01)):]
 
-        if type_of_plot == "area":
-            cust_data = data[selected_columns_names]
-            st.area_chart(cust_data)
-        
-        elif type_of_plot == "bar":
-            cust_data = data[selected_columns_names]
-            st.bar_chart(cust_data)
+    model.fit(train[features], train[target])
+    predictions = model.predict(test[features])
+    predictions_p = model.predict_proba(test[features])
+    accuracy = accuracy_score(test[target], predictions)
+    f_score = f1_score(test[target], predictions, average="macro")
+    p = precision_score(test[target], predictions, average="macro")
+    r = recall_score(test[target], predictions, average="macro")
+    ras = roc_auc_score(test[target], predictions_p[:, 1])
+    accuracy_cv = 0
+    if cv > 0:
+        scores = cross_validate(model, df[features], df[target], cv=cv)
+        accuracy_cv = np.mean(scores["test_score"])
+    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv
 
-        elif type_of_plot == "line":
-            cust_data = data[selected_columns_names]
-            st.line_chart(cust_data)
 
-        elif type_of_plot:
-            fig, ax = plt.subplots(figsize=(20, 20))
-            ax = data[selected_columns_names].plot(kind=type_of_plot)
-            st.pyplot(fig)
+def view(df, target, length, predictions, predictions_p):
+    test = df[int(len(df)*(length[1]*0.01)):]
+    df_t = pd.DataFrame({"actual": test[target],
+                         "predictions": predictions,
+                         "predictions_proba": predictions_p[:, 1]})
+    st.write(df_t)
+    st.markdown("""
+            <h6 style="font-size: 10px;">The column "predictions_proba" allows to determine the probability of success of the predicted value compared to 1.</h6>
+            """,
+                unsafe_allow_html=True)
 
-    if st.checkbox('Correlation Map'):
-        fig, ax = plt.subplots()
-        ax = sns.heatmap(data.corr(), annot=True, cbar=False)
-        st.pyplot(fig)
+    labels = ['actual_1', 'predictions_1', 'actual_0', 'predictions_0']
+    values = [len(df_t.loc[df_t["actual"] == 1, "actual"]), len(df_t.loc[df_t["predictions"] == 1, "predictions"]),
+              len(df_t.loc[df_t["actual"] == 0, "actual"]), len(df_t.loc[df_t["predictions"] == 0, "predictions"])]
 
-    # Count plot
-    if st.checkbox('Count plot'):
-        columns = ['Age', 'Geography', 'Gender', 'IsActiveMember']
-        choice = st.selectbox("Select a columns", columns)
-        fig, ax = plt.subplots()
-        fig = plt.figure(figsize=(16, 9))
-        ax = sns.countplot(x=choice, data=data, hue='Exited')
-        
-        # fig = px.histogram(data, x=data[choice])
-        # st.plotly_chart(fig)
+    fig = px.bar(x=labels, y=values, width=620, height=420,
+                 title="Actual and Predicted values of 0 and 1")
+    fig.update_xaxes(title_text='values')
+    fig.update_yaxes(title_text='number of values ​​present')
+    st.plotly_chart(fig)
+    return df_t
 
-        st.pyplot(fig)
-        
-        if choice != 'Age':
-            fig2, ax2 = plt.subplots()
-            ax2 = sns.heatmap(pd.crosstab(data.Exited, data[choice], normalize='columns'), annot=True)
-            st.pyplot(fig2)
-        
 
-        
+def main_content():
+    st.markdown("""
+        <h1 style="font-size: 50px; color:#DE781F" >Churn Prediction App</h1>
+        """, unsafe_allow_html=True)
+    st.markdown("""
+        Hello world ! What's going on :smiley:
+        """)
 
+    st.sidebar.markdown("""
+            <h2 style="font-size: 15px;">Navigation</h2>
+            """,
+                        unsafe_allow_html=True)
+
+    separateur = st.sidebar.selectbox("Choose a separator", [',', ';'])
+    uploaded = st.sidebar.file_uploader("upload", type='csv')
+
+    if uploaded:
+        data = load_data(uploaded, separateur)
+        st.sidebar.write(data.shape)
+        if data.shape[0] > 5000:
+            reducer = st.sidebar.slider(
+                "Randomly reduce data size %", min_value=0.2, max_value=0.9, value=0.5)
+            reduction = data.shape[0]*reducer
+            data = data.sample(int(reduction))
+            st.sidebar.write(data.shape)
+        st.sidebar.markdown("""
+            <h2 style="font-size: 15px;">Frame</h2>
+            """,
+                            unsafe_allow_html=True)
+
+        if st.sidebar.button('Display Dataframe'):
+            "Raw Data", data.head(10)
+
+        if st.sidebar.button('Some Statistics'):
+            st.write(data.describe())
+
+        target = st.sidebar.selectbox(
+            'Choose the Target Variable : ', data.columns)
+        if len(data[target].unique()) > 2:
+            st.sidebar.warning("This variable have too much unique value")
+        elif data.dtypes[target] == 'object':
+            st.sidebar.write(data[target].unique())
+            st.sidebar.write(
+                "This target Variable don't have numeric variable. Let's change it:")
+            input1 = st.sidebar.text_input(
+                f"Change {data[target].unique()[0]} into : ")
+            input2 = st.sidebar.text_input(
+                f"Change {data[target].unique()[1]} into : ")
+            if st.sidebar.button("submit"):
+                data[target] = data[target].map(
+                    {data[target].unique()[0]: int(input1), data[target].unique()[1]: int(input2)})
+                st.write(data)
+        else:
+            st.sidebar.info("We are good to go :smiley:")
+            target_balance = target_info(data, target)
+            if target_balance[0] > 2*target_balance[1]:
+                st.sidebar.write("this dataset is unbalanced")
+                smote = st.sidebar.radio("smote method ?", ["Yes", "No"])
+
+        st.sidebar.markdown("""
+            <h2 style="font-size: 15px;">Visualizing</h2>
+            """,
+                            unsafe_allow_html=True)
+        type_of_plot = st.sidebar.selectbox("Select a type of plot", [
+                                            "Distribution", "Bar", "Histogram", "Boxplot", "Map", "Scatter", "Countplot"])
+        if type_of_plot == "Histogram":
+            bins = st.sidebar.number_input("Enter bins number : ")
+            selected_columns_names = st.sidebar.selectbox(
+                "Select a colomn", data.columns.tolist())
+
+        elif type_of_plot == 'Countplot':
+            selected_columns_names = st.sidebar.selectbox(
+                "Select one column :", data.select_dtypes('object').columns)
+
+        else:
+            selected_columns_names = st.sidebar.multiselect(
+                "Select columns", data.columns.tolist())
+
+        if st.sidebar.button('Generate Plot'):
+            st.success(
+                f"Generating {type_of_plot} for {selected_columns_names}")
+            customized_plot(type_of_plot, selected_columns_names,
+                            data, target, bins=0)
+
+        st.sidebar.markdown("""
+            <h2 style="font-size: 15px;">Preprocessing</h2>
+            """,
+                            unsafe_allow_html=True)
+
+        if st.sidebar.checkbox("Check null values"):
+            st.write(data.isna().sum())
+            null_vals = [i for i in data.isna().sum()]
+            if np.sum(null_vals) != 0:
+                st.write(
+                    f"There is {np.sum(null_vals)} variable with null values")
+                choice = st.sidebar.selectbox("How do you want to remove NaN values?", [
+                                              'Dropna', 'Replace by Mean', 'Drop Columns with NaN'])
+                missing_val_count_by_column = (data.isnull().sum())
+                col_with_NaN = missing_val_count_by_column[missing_val_count_by_column > 0].index.to_list(
+                )
+
+                deal_with_NaN(data, col_with_NaN)
+            else:
+                st.write("Hum !! You are Lucky :smiley:")
+
+        features = st.sidebar.multiselect(
+            "Features", data.drop(target, axis=1).columns)
+
+        if features:
+            data_for_ML = data[features]
+            # st.write(data_for_ML)
+
+            cat_variable = data_for_ML.select_dtypes(
+                'object').columns.to_list()
+            if len(cat_variable) != 0:
+                st.sidebar.write(f"{cat_variable} are categorical data")
+                choice = st.sidebar.selectbox(f"Would you like to create dummies for them ?", [
+                                              'Choose an options', 'OneHotEncoding', 'LabelEncoding'])
+
+                if choice == 'OneHotEncoding':
+                    try:
+                        data_for_ML = pd.get_dummies(
+                            data=data_for_ML, columns=cat_variable, drop_first=True)
+                        st.write(data_for_ML)
+                    except:
+                        st.sidebar.write('Choose only one option')
+                else:
+                    try:
+                        encoder = LabelEncoder()
+                        data_for_ML[cat_variable] = encoder.fit_transform(
+                            data_for_ML[cat_variable])
+                        st.write(data_for_ML)
+                    except:
+                        st.sidebar.write('Choose only one option')
+
+        st.sidebar.markdown("""
+            <h2 style="font-size: 15px;">Modeling</h2>
+            """,
+                            unsafe_allow_html=True)
+        length = st.sidebar.slider(
+            "Train size", min_value=0.2, max_value=0.9, value=0.8)
+
+        cv = st.sidebar.selectbox(
+            "Cross Validation on the train",
+            [0, 5, 10, 15, 20])
+
+        model = st.sidebar.selectbox(
+            "Which model do you like!",
+            ["Decision Tree",
+             "Random Forest",
+             "KnnClassifier",
+             "Logistic Regression",
+             "SgdClassifier",
+             "SVClassification"
+             ])
+        if model == "Decision Tree":
+            params = ["criterion", "max_depth", "max_features",
+                      "min_samples_leaf", "min_samples_split"]
+            check_param = [st.sidebar.checkbox(
+                param, key=param) for param in params]
+            criterion, max_depth, max_features, min_samples_leaf, min_samples_split = "gini", None, None, 1, 2
+            for p in range(len(params)):
+                if check_param[p] and params[p] == "criterion":
+                    criterion = st.sidebar.selectbox(
+                        "enter criterion value",
+                        ["gini", "entropy"]
+                    )
+                if check_param[p] and params[p] == "max_depth":
+                    max_depth = st.sidebar.selectbox(
+                        "enter max_depth value",
+                        [None, 2, 5, 10, 15]
+                    )
+                if check_param[p] and params[p] == "max_features":
+                    max_features = st.sidebar.selectbox(
+                        "enter max_features value",
+                        [None, "auto", "sqrt", "log2"]
+                    )
+                if check_param[p] and params[p] == "min_samples_leaf":
+                    min_samples_leaf = st.sidebar.selectbox(
+                        "enter min_samples_leaf value",
+                        [1, 5, 8, 12]
+                    )
+                if check_param[p] and params[p] == "min_samples_split":
+                    min_samples_split = st.sidebar.selectbox(
+                        "enter min_samples_split value",
+                        [2, 3, 5, 8]
+                    )
+            if st.sidebar.button("Predicting"):
+                dt = DecisionTreeClassifier(random_state=0, criterion=criterion, max_depth=max_depth,
+                                            max_features=max_features, min_samples_leaf=min_samples_leaf, min_samples_split=min_samples_split)
+                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
+                    df, features, target, dt, cv, length)
+                df_t = view(df, target, length, predictions, predictions_p)
+                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                    "precision_score": [p], "recall_score": [p],
+                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                tab.index = [""] * len(tab)
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                """,
+                            unsafe_allow_html=True)
+
+                st.table(tab)
+
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                """,
+                            unsafe_allow_html=True)
+                retention = (
+                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                churn = (
+                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                st.write("Retention rate: "+str(retention)+"%")
+                st.write("Churn rate: "+str(churn)+"%")
+
+                st.sidebar.markdown(download_link(
+                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+        if model == "Random Forest":
+            params = ["n_estimators", "criterion", "max_depth",
+                      "max_features", "min_samples_leaf", "min_samples_split"]
+            check_param = [st.sidebar.checkbox(
+                param, key=param) for param in params]
+            n_estimators, criterion, max_depth, max_features, min_samples_leaf, min_samples_split = 100, "gini", None, None, 1, 2
+            for p in range(len(params)):
+                if check_param[p] and params[p] == "n_estimators":
+                    n_estimators = st.sidebar.selectbox(
+                        "enter n_estimators value",
+                        [100, 4, 6, 9]
+                    )
+                if check_param[p] and params[p] == "criterion":
+                    criterion = st.sidebar.selectbox(
+                        "enter criterion value",
+                        ["gini", "entropy"]
+                    )
+                if check_param[p] and params[p] == "max_depth":
+                    max_depth = st.sidebar.selectbox(
+                        "enter max_depth value",
+                        [None, 2, 5, 10, 15]
+                    )
+                if check_param[p] and params[p] == "max_features":
+                    max_features = st.sidebar.selectbox(
+                        "enter max_features value",
+                        [None, "auto", "sqrt", "log2"]
+                    )
+                if check_param[p] and params[p] == "min_samples_leaf":
+                    min_samples_leaf = st.sidebar.selectbox(
+                        "enter min_samples_leaf value",
+                        [1, 5, 8, 12]
+                    )
+                if check_param[p] and params[p] == "min_samples_split":
+                    min_samples_split = st.sidebar.selectbox(
+                        "enter min_samples_split value",
+                        [2, 3, 5, 8]
+                    )
+            if st.sidebar.button("Predicting"):
+                rf = RandomForestClassifier(random_state=0, n_estimators=n_estimators, criterion=criterion, max_depth=max_depth,
+                                            max_features=max_features, min_samples_leaf=min_samples_leaf, min_samples_split=min_samples_split)
+                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
+                    df, features, target, rf, cv, length)
+                df_t = view(df, target, length, predictions, predictions_p)
+                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                    "precision_score": [p], "recall_score": [p],
+                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                tab.index = [""] * len(tab)
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                """,
+                            unsafe_allow_html=True)
+
+                st.table(tab)
+
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                """,
+                            unsafe_allow_html=True)
+                retention = (
+                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                churn = (
+                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                st.write("Retention rate: "+str(retention)+"%")
+                st.write("Churn rate: "+str(churn)+"%")
+
+                st.sidebar.markdown(download_link(
+                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+        if model == "KnnClassifier":
+            params = ["n_neighbors", "weights", "algorithm"]
+            check_param = [st.sidebar.checkbox(
+                param, key=param) for param in params]
+            n_neighbors, weights, algorithm = 5, "uniform", "auto"
+            for p in range(len(params)):
+                if check_param[p] and params[p] == "n_neighbors":
+                    n_neighbors = st.sidebar.selectbox(
+                        "enter n_neighbors value",
+                        [5, 10, 15, 20, 25]
+                    )
+                if check_param[p] and params[p] == "weights":
+                    weights = st.sidebar.selectbox(
+                        "enter weights value",
+                        ["uniform", "distance"]
+                    )
+                if check_param[p] and params[p] == "algorithm":
+                    algorithm = st.sidebar.selectbox(
+                        "enter algorithm value",
+                        ["auto", "ball_tree", "kd_tree", "brute"]
+                    )
+            if st.sidebar.button("Predicting"):
+                knn = KNeighborsClassifier(
+                    n_neighbors=n_neighbors, weights=weights, algorithm=algorithm)
+                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
+                    df, features, target, knn, cv, length)
+                df_t = view(df, target, length, predictions, predictions_p)
+                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                    "precision_score": [p], "recall_score": [p],
+                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                tab.index = [""] * len(tab)
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                """,
+                            unsafe_allow_html=True)
+
+                st.table(tab)
+
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                """,
+                            unsafe_allow_html=True)
+                retention = (
+                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                churn = (
+                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                st.write("Retention rate: "+str(retention)+"%")
+                st.write("Churn rate: "+str(churn)+"%")
+
+                st.sidebar.markdown(download_link(
+                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+        if model == "Logistic Regression":
+            params = ["penalty", "solver"]
+            check_param = [st.sidebar.checkbox(
+                param, key=param) for param in params]
+            penalty, solver = "l2", "lbfgs"
+            for p in range(len(params)):
+                if check_param[p] and params[p] == "penalty":
+                    penalty = st.sidebar.selectbox(
+                        "enter penalty value",
+                        ["l2", "l1", "elasticnet", "none"]
+                    )
+                if check_param[p] and params[p] == "solver":
+                    solver = st.sidebar.selectbox(
+                        "enter solver value",
+                        ["lbfgs", "newton-cg", "liblinear", "sag", "saga"]
+                    )
+            if st.sidebar.button("Predicting"):
+                lr = LogisticRegression(
+                    random_state=0, penalty=penalty, solver=solver)
+                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
+                    df, features, target, lr, cv, length)
+                df_t = view(df, target, length, predictions, predictions_p)
+                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                    "precision_score": [p], "recall_score": [p],
+                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                tab.index = [""] * len(tab)
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                """,
+                            unsafe_allow_html=True)
+
+                st.table(tab)
+
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                """,
+                            unsafe_allow_html=True)
+                retention = (
+                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                churn = (
+                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                st.write("Retention rate: "+str(retention)+"%")
+                st.write("Churn rate: "+str(churn)+"%")
+                st.sidebar.markdown(download_link(
+                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+        if model == "SgdClassifier":
+            params = ["loss", "penalty"]
+            check_param = [st.sidebar.checkbox(
+                param, key=param) for param in params]
+            loss, penalty = "hinge", "l2"
+            for p in range(len(params)):
+                if check_param[p] and params[p] == "loss":
+                    loss = st.sidebar.selectbox(
+                        "enter hinge value",
+                        ["hinge", "log", "modified_huber",
+                         "squared_hinge", "perceptron"]
+                    )
+                if check_param[p] and params[p] == "penalty":
+                    penalty = st.sidebar.selectbox(
+                        "enter penalty value",
+                        ["l2", "l1", "elasticnet"]
+                    )
+            if st.sidebar.button("Predicting"):
+                sc = SGDClassifier(random_state=0, loss=loss, penalty=penalty)
+                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
+                    df, features, target, sc, cv, length)
+                df_t = view(df, target, length, predictions, predictions_p)
+                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                    "precision_score": [p], "recall_score": [p],
+                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                tab.index = [""] * len(tab)
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                """,
+                            unsafe_allow_html=True)
+
+                st.table(tab)
+
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                """,
+                            unsafe_allow_html=True)
+                retention = (
+                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                churn = (
+                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                st.write("Retention rate: "+str(retention)+"%")
+                st.write("Churn rate: "+str(churn)+"%")
+
+                st.sidebar.markdown(download_link(
+                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+        if model == "SVClassification":
+            params = ["kernel", "degree"]
+            check_param = [st.sidebar.checkbox(
+                param, key=param) for param in params]
+            kernel, degree = "rbf", 3
+            for p in range(len(params)):
+                if check_param[p] and params[p] == "kernel":
+                    kernel = st.sidebar.selectbox(
+                        "enter kernel value",
+                        ["rbf", "poly", "sigmoid", "precomputed"]
+                    )
+                if check_param[p] and params[p] == "degree":
+                    degree = st.sidebar.selectbox(
+                        "enter degree value",
+                        [3, 6, 9]
+                    )
+            if st.sidebar.button("Predicting"):
+                sv = SVC(random_state=0, kernel=kernel,
+                         degree=degree, probability=True)
+                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
+                    df, features, target, sv, cv, length)
+                df_t = view(df, target, length, predictions, predictions_p)
+                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                    "precision_score": [p], "recall_score": [p],
+                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                tab.index = [""] * len(tab)
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                """,
+                            unsafe_allow_html=True)
+
+                st.table(tab)
+
+                st.markdown("""
+                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                """,
+                            unsafe_allow_html=True)
+                retention = (
+                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                churn = (
+                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                st.write("Retention rate: "+str(retention)+"%")
+                st.write("Churn rate: "+str(churn)+"%")
+
+                st.sidebar.markdown(download_link(
+                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+
+def deal_with_NaN(data, col_with_NaN):
+    if choice == "Dropna":
+        return data.dropna(axis=0)
+
+    if choice == "Replace by Mean":
+        imputer = SimpleImputer(strategy='mean')
+        Imputed_data = pd.DataFrame(imputer.fit_transform(data))
+        Imputed_data = data.columns
+        return Imputed_data
+
+    if choice == "Drop Columns with NaN":
+        return data.drop(columns=col_with_NaN)
+
+
+def corr_matrix(data):
+    fig, ax = plt.subplots()
+    ax = sns.heatmap(data.corr(), annot=True, cbar=False)
+    st.pyplot(fig)
+
+
+def create_dummy_and_encoding(data):
+    col_to_drop = ['RowNumber', 'CustomerId', 'Surname']
+    for col in col_to_drop:
+        if col in data.columns:
+            data.drop(col, axis=1, inplace=True)
+    data.loc[:, 'Gender'] = data.loc[:, 'Gender'].map({'Female': 0, 'Male': 1})
+    data = pd.get_dummies(data=data, drop_first=True)
+    return data
+
+
+def imputation(df):
+    return df.dropna(axis=0)
+
+
+def preprocessing(data):
+    data = create_dummy_and_encoding(data)
+    data = imputation(data)
+    X = data.drop('Exited', axis=1)
+    y = data.Exited
+
+    print(y.value_counts())
+
+    return X, y
+
+
+def load_model():
+    with open('model/RandomForest', 'rb') as f:
+        RandomForest = pickle.load(f)
+    with open('model/XGBoostClassifier', 'rb') as f:
+        XGBOOST = pickle.load(f)
+
+    return RandomForest, XGBOOST
+
+
+def evaluation(model, X_train, y_train, X_test, y_test):
+    model.fit(X_train, y_train)
+    ypred = model.predict(X_test)
+
+    print(confusion_matrix(y_test, ypred))
+    print(classification_report(y_test, ypred))
+
+    N, train_scores, test_scores = learning_curve(model, X_train, y_train, train_sizes=np.linspace(0.1, 1, 10),
+                                                  cv=10, scoring='f1')
+
+    plt.figure(figsize=(12, 8))
+    plt.plot(N, train_scores.mean(axis=1), label='train score')
+    plt.plot(N, test_scores.mean(axis=1), label='test score')
+    plt.legend()
+    plt.show()
+
+
+def modelisation_content(data):
+    st.markdown("""
+        <h1 style="font-size: 50px; color:#DE781F" >Modelisation</h1>
+        <div>We find in our previous analysis(EDA) that wa have an unbalanced Dataset. So, we can perform SMOTE Analysis to solve the issue or use another metric like <em style = "font-weight:bold; color:#1F85DE">Precision</em>, <em style = "color:#1F85DE; font-weight :bold">Recall</em> or <em style = "color:#1F85DE; font-weight :bold">F1_Score</em> if we want to be more rigourous.</div>
+        """, unsafe_allow_html=True)
+    st.sidebar.subheader("Train set size")
+    train_size = st.sidebar.slider(
+        "Train", min_value=0.2, max_value=0.9, value=0.8)
+
+    # if st.sidebar.button("Submit"):
+    smote = st.sidebar.radio("Smote Analysis ?", ["Yes", "No"])
+    list_of_algo = st.sidebar.multiselect("choose an algorithm", [
+                                          'Random Forest Classifier', 'AdaBoostClassifier', 'XGBOOSTClassifer', 'KNN', 'SVM'])
+
+    st.sidebar.text(
+        'Random Forest and XGBOOST are pre-trained and they show the best perofrmance for this particular problem !!')
+    test_size = 1 - float(train_size)
+    trainset, testset = train_test_split(
+        data, test_size=test_size, random_state=0)
+
+    X_train, y_train = preprocessing(trainset)
+    X_test, y_test = preprocessing(testset)
+
+    st.subheader("Trainset after Preprocessing")
+    st.write(X_train.head(5))
+
+    st.subheader("Target Variable")
+    st.write(y_train.head(5))
+
+    if ('Random Forest Classifier' or 'XGBOOSTClassifer') in list_of_algo:
+        predict = st.sidebar.button('PREDICT')
+        if predict:
+            RandomForest, XGBOOST = load_model()
+            y_pred_random_forest = RandomForest.predict(X_test)
+            y_pred_xgboost = XGBOOST.predict(X_test)
+            st.subheader("Predicted values with RandomForest")
+            val = pd.DataFrame(
+                {'True value': y_test, 'Predicted Values': y_pred_random_forest})
+            st.dataframe(val.style.highlight_max(axis=0))
+            st.help(st.dataframe)
+            st.subheader("Predicted values with XGBOOST")
+            st.write(y_pred_xgboost)
+
+
+def main():
+    """Common Machine Learning EDA"""
+
+    main_content()
 
 
 if __name__ == '__main__':
     main()
+
+# def highlight_max(df):
+#     '''
+#     highlight the maximum in a Series yellow.
+#     '''
+#     if df.iloc[:, 0] == df.iloc[:, 1]
+
+#         return ['background-color: yellow' if v else '' for v in is_max]
