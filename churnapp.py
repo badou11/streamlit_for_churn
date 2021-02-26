@@ -61,10 +61,23 @@ def download_link(object_to_download, download_filename, download_link_text):
 
 def customized_plot(type_of_plot, columns, data, target, bins=0):
 
+    if type_of_plot == "Scatter":
+        if len(columns) > 1 and len(columns) <= 2:
+            fig = px.scatter(
+                data, x=columns[0], y=columns[1], width=620, height=420, title="Evolution of "+columns[0]+" according to " + columns[1])
+
+            fig.update_layout(title_x=0.5, font_size=15)
+            st.plotly_chart(fig)
+        else:
+            st.sidebar.error('Choose until 2 columns')
+
     if type_of_plot == "Bar":
-        fig = px.bar(data_frame=data, x=columns[0], y=columns[1],
-                     width=620, height=420, barmode="relative")
-        st.plotly_chart(fig)
+        if len(columns) > 1 and len(columns) <= 2:
+            fig = px.bar(data_frame=data, x=columns[0], y=columns[1],
+                         width=620, height=420, barmode="relative")
+            st.plotly_chart(fig)
+        else:
+            st.sidebar.error('Choose until 2 columns')
 
     if type_of_plot == "Countplot":
         fig, ax = plt.subplots()
@@ -74,7 +87,7 @@ def customized_plot(type_of_plot, columns, data, target, bins=0):
 
         fig2, ax2 = plt.subplots()
         ax2 = sns.heatmap(pd.crosstab(
-            data.target, data[columns], normalize='columns'), annot=True)
+            data[target], data[columns], normalize='columns'), annot=True)
         st.pyplot(fig2)
 
     if type_of_plot == "Boxplot":
@@ -88,7 +101,8 @@ def customized_plot(type_of_plot, columns, data, target, bins=0):
 
     if type_of_plot == "Histogram":
         fig = px.histogram(data_frame=data, x=columns,
-                           nbins=int(bins), width=620, height=420)
+                           nbins=int(bins), width=620, height=420, title="Distribution of "+columns)
+        fig.update_layout(title_x=0.5, font_size=15)
         st.plotly_chart(fig)
 
     if type_of_plot == "Distribution":
@@ -265,7 +279,7 @@ def main_content():
             """,
                             unsafe_allow_html=True)
         type_of_plot = st.sidebar.selectbox("Select a type of plot", [
-                                            "Distribution", "Bar", "Histogram", "Boxplot", "Map", "Scatter", "Countplot"])
+                                            "Distribution", "Bar", "Histogram", "Boxplot", "Scatter", "Countplot"])
         if type_of_plot == "Histogram":
             bins = st.sidebar.number_input("Enter bins number : ")
             selected_columns_names = st.sidebar.selectbox(
@@ -670,9 +684,6 @@ def main_content():
                     st.write("Retention rate: "+str(retention)+"%")
                     st.write("Churn rate: "+str(churn)+"%")
 
-                    # st.sidebar.markdown(download_link(
-                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
-
                     st.sidebar.markdown(download_link(
                         pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
@@ -726,9 +737,6 @@ def main_content():
                     st.write("Retention rate: "+str(retention)+"%")
                     st.write("Churn rate: "+str(churn)+"%")
 
-                    # st.sidebar.markdown(download_link(
-                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
-
                     st.sidebar.markdown(download_link(
                         pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
@@ -751,20 +759,6 @@ def corr_matrix(data):
     fig, ax = plt.subplots()
     ax = sns.heatmap(data.corr(), annot=True, cbar=False)
     st.pyplot(fig)
-
-
-# def create_dummy_and_encoding(data):
-#     col_to_drop = ['RowNumber', 'CustomerId', 'Surname']
-#     for col in col_to_drop:
-#         if col in data.columns:
-#             data.drop(col, axis=1, inplace=True)
-#     data.loc[:, 'Gender'] = data.loc[:, 'Gender'].map({'Female': 0, 'Male': 1})
-#     data = pd.get_dummies(data=data, drop_first=True)
-#     return data
-
-
-# def imputation(data):
-#     return data.dropna(axis=0)
 
 
 def preprocessing(data):
@@ -795,52 +789,6 @@ def evaluation(model, X_train, y_train, X_test, y_test, cv):
     st.pyplot(fig)
 
     return model
-
-
-# def modelisation_content(data):
-#     st.markdown("""
-#         <h1 style="font-size: 50px; color:#DE781F" >Modelisation</h1>
-#         <div>We find in our previous analysis(EDA) that wa have an unbalanced Dataset. So, we can perform SMOTE Analysis to solve the issue or use another metric like <em style = "font-weight:bold; color:#1F85DE">Precision</em>, <em style = "color:#1F85DE; font-weight :bold">Recall</em> or <em style = "color:#1F85DE; font-weight :bold">F1_Score</em> if we want to be more rigourous.</div>
-#         """, unsafe_allow_html=True)
-#     st.sidebar.subheader("Train set size")
-#     train_size = st.sidebar.slider(
-#         "Train", min_value=0.2, max_value=0.9, value=0.8)
-
-#     # if st.sidebar.button("Submit"):
-#     smote = st.sidebar.radio("Smote Analysis ?", ["Yes", "No"])
-#     list_of_algo = st.sidebar.multiselect("choose an algorithm", [
-#                                           'Random Forest Classifier', 'AdaBoostClassifier', 'XGBOOSTClassifer', 'KNN', 'SVM'])
-
-#     st.sidebar.text(
-#         'Random Forest and XGBOOST are pre-trained and they show the best perofrmance for this particular problem !!')
-#     test_size = 1 - float(train_size)
-#     trainset, testset = train_test_split(
-#         data, test_size=test_size, random_state=0)
-
-#     X_train, y_train = preprocessing(trainset)
-#     "Y_train Size", y_train.shape
-#     X_test, y_test = preprocessing(testset)
-#     "Y_test Size", y_train.shape
-
-#     st.subheader("Trainset after Preprocessing")
-#     st.write(X_train.head(5))
-
-#     st.subheader("Target Variable")
-#     st.write(y_train.head(5))
-
-#     if ('Random Forest Classifier' or 'XGBOOSTClassifer') in list_of_algo:
-#         predict = st.sidebar.button('PREDICT')
-#         if predict:
-#             RandomForest, XGBOOST = load_model()
-#             y_pred_random_forest = RandomForest.predict(X_test)
-#             y_pred_xgboost = XGBOOST.predict(X_test)
-#             st.subheader("Predicted values with RandomForest")
-#             val = pd.DataFrame(
-#                 {'True value': y_test, 'Predicted Values': y_pred_random_forest})
-#             st.dataframe(val.style.highlight_max(axis=0))
-#             st.help(st.dataframe)
-#             st.subheader("Predicted values with XGBOOST")
-#             st.write(y_pred_xgboost)
 
 
 def main():
