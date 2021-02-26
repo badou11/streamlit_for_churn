@@ -33,8 +33,8 @@ matplotlib.use('Agg')
 
 
 @st.cache
-def load_data(uploaded, separateur):
-    return pd.read_csv(uploaded, sep=separateur)
+def load_data(uploaded):
+    return pd.read_csv(uploaded)
 
 
 def download_link(object_to_download, download_filename, download_link_text):
@@ -219,12 +219,11 @@ def main_content():
             """,
                         unsafe_allow_html=True)
 
-    separateur = st.sidebar.selectbox("Choose a separator", [',', ';'])
+    # separateur = st.sidebar.selectbox("Choose a separator", [',', ';'])
     uploaded = st.sidebar.file_uploader("upload", type='csv')
 
     if uploaded:
-        dataset = load_data(uploaded, separateur)
-        data = dataset.copy()
+        data = load_data(uploaded)
         st.sidebar.write(data.shape)
         if data.shape[0] > 5000:
             reducer = st.sidebar.slider(
