@@ -363,11 +363,11 @@ def main_content():
 
         model = st.sidebar.selectbox(
             "Which model do you like!",
-            ["Decision Tree",
-             "Random Forest",
+            ["Random Forest",
              "KnnClassifier",
              "Logistic Regression",
              "SgdClassifier",
+             "Decision Tree",
              "SVClassification",
              "XGBoostClassifier"
              ])
