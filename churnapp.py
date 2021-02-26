@@ -37,6 +37,28 @@ def load_data(uploaded, separateur):
     return pd.read_csv(uploaded, sep=separateur)
 
 
+def download_link(object_to_download, download_filename, download_link_text):
+    """
+    Generates a link to download the given object_to_download.
+
+    object_to_download (str, pd.DataFrame):  The object to be downloaded.
+    download_filename (str): filename and extension of file. e.g. mydata.csv, some_txt_output.txt
+    download_link_text (str): Text to display for download link.
+
+    Examples:
+    download_link(YOUR_DF, 'YOUR_DF.csv', 'Click here to download data!')
+    download_link(YOUR_STRING, 'YOUR_STRING.txt', 'Click here to download your text!')
+
+    """
+    if isinstance(object_to_download, pd.DataFrame):
+        object_to_download = object_to_download.to_csv(index=False)
+
+    # some strings <-> bytes conversions necessary here
+    b64 = base64.b64encode(object_to_download.encode()).decode()
+
+    return f'<a style="font-size: 10px; color: purple; text-decoration: none;" href="data:file/txt;base64,{b64}" download="{download_filename}">{download_link_text}</a>'
+
+
 def customized_plot(type_of_plot, columns, data, target, bins=0):
 
     if type_of_plot == "Bar":
@@ -113,11 +135,7 @@ def customized_plot(type_of_plot, columns, data, target, bins=0):
 def target_info(data, target):
     st.text('Value Counts By Target/Class')
     st.write(data[target].value_counts(normalize=True))
-    # fig, ax = plt.subplots()
     st.write(data.iloc[:, -1].value_counts().plot.pie())
-
-    # fig = px.pie(data, values=data[target].value_counts(), names=data[target].unique(),
-    #              title="statistic of "+target, labels={0: 'Stayed', 1: 'Exited'})
 
     fig = go.Figure(
         data=[go.Pie(labels=['Stayed', 'Exited'], values=data[target].value_counts())])
@@ -129,21 +147,17 @@ def target_info(data, target):
 
 
 def core(data, features, target, model, cv, length):
-    # train = data[:int(len(data)*(length[1]*0.01))]
-    # test = data[int(len(data)*(length[1]*0.01)):]
 
     trainset, testset = train_test_split(data, train_size=length)
     X_train, y_train = preprocessing(trainset)
+    "Train size", y_train.value_counts()
     X_test, y_test = preprocessing(testset)
-
-    # st.subheader("Trainset after Preprocessing")
-    # st.write(X_train.head(5))
+    "Test size", y_test.value_counts()
 
     evaluation(model, X_train, y_train, X_test, y_test, cv)
 
     predictions = model.predict(X_test)
     predictions_p = model.predict_proba(X_test)
-    st.write(predictions_p)
     accuracy = accuracy_score(y_test, predictions)
     f_score = f1_score(y_test, predictions, average="macro")
     p = precision_score(y_test, predictions, average="macro")
@@ -153,11 +167,10 @@ def core(data, features, target, model, cv, length):
     if cv > 0:
         scores = cross_validate(model, data[features], data[target], cv=cv)
         accuracy_cv = np.mean(scores["test_score"])
-    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test
+    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test
 
 
 def view(data, target, length, predictions, predictions_p, y_test):
-    # test = data[int(len(data)*(length[1]*0.01)):]
     data_t = pd.DataFrame({"actual": y_test,
                            "predictions": predictions,
                            "predictions_proba": predictions_p[:, 1]})
@@ -196,7 +209,8 @@ def main_content():
     uploaded = st.sidebar.file_uploader("upload", type='csv')
 
     if uploaded:
-        data = load_data(uploaded, separateur)
+        dataset = load_data(uploaded, separateur)
+        data = dataset.copy()
         st.sidebar.write(data.shape)
         if data.shape[0] > 5000:
             reducer = st.sidebar.slider(
@@ -312,14 +326,16 @@ def main_content():
                         st.write(data)
                     except:
                         st.sidebar.write('Choose only one option')
-                else:
+                elif choice == 'LabelEncoding':
                     try:
                         encoder = LabelEncoder()
-                        data[cat_variable] = encoder.fit_transform(
-                            data[cat_variable])
+                        for col in cat_variable:
+                            data[col] = encoder.fit_transform(data[col])
                         st.write(data)
                     except:
                         st.sidebar.write('Choose only one option')
+                else:
+                    st.sidebar.warning("You have to choose an option")
 
         st.sidebar.markdown("""
             <h2 style="font-size: 15px;">Modeling</h2>
@@ -382,7 +398,7 @@ def main_content():
                 elif good_target == False:
                     st.write("Choose an appropriete target variable")
                 else:
-                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test = core(
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
                         data, features, target, dt, cv, length)
                     data_t = view(data, target, length,
                                   predictions, predictions_p, y_test)
@@ -409,7 +425,7 @@ def main_content():
                     st.write("Churn rate: "+str(churn)+"%")
 
                     st.sidebar.markdown(download_link(
-                        data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "Random Forest":
             params = ["n_estimators", "criterion", "max_depth",
@@ -451,33 +467,42 @@ def main_content():
             if st.sidebar.button("Predicting"):
                 rf = RandomForestClassifier(random_state=0, n_estimators=n_estimators, criterion=criterion, max_depth=max_depth,
                                             max_features=max_features, min_samples_leaf=min_samples_leaf, min_samples_split=min_samples_split)
-                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    data, features, target, rf, cv, length)
-                data_t = view(data, target, length, predictions, predictions_p)
-                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                    "precision_score": [p], "recall_score": [p],
-                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                tab.index = [""] * len(tab)
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                """,
-                            unsafe_allow_html=True)
+                if not features:
+                    st.write("You have to choose some features for training")
+                elif good_target == False:
+                    st.write("Choose an appropriete target variable")
+                else:
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+                        data, features, target, rf, cv, length)
+                    data_t = view(data, target, length,
+                                  predictions, predictions_p, y_test)
+                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                        "precision_score": [p], "recall_score": [p],
+                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                    tab.index = [""] * len(tab)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                    """,
+                                unsafe_allow_html=True)
 
-                st.table(tab)
+                    st.table(tab)
 
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                """,
-                            unsafe_allow_html=True)
-                retention = (
-                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                churn = (
-                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                st.write("Retention rate: "+str(retention)+"%")
-                st.write("Churn rate: "+str(churn)+"%")
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                    """,
+                                unsafe_allow_html=True)
+                    retention = (
+                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                    churn = (
+                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                    st.write("Retention rate: "+str(retention)+"%")
+                    st.write("Churn rate: "+str(churn)+"%")
 
-                st.sidebar.markdown(download_link(
-                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+                    st.sidebar.markdown(download_link(
+                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "KnnClassifier":
             params = ["n_neighbors", "weights", "algorithm"]
@@ -503,33 +528,42 @@ def main_content():
             if st.sidebar.button("Predicting"):
                 knn = KNeighborsClassifier(
                     n_neighbors=n_neighbors, weights=weights, algorithm=algorithm)
-                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    data, features, target, knn, cv, length)
-                data_t = view(data, target, length, predictions, predictions_p)
-                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                    "precision_score": [p], "recall_score": [p],
-                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                tab.index = [""] * len(tab)
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                """,
-                            unsafe_allow_html=True)
+                if not features:
+                    st.write("You have to choose some features for training")
+                elif good_target == False:
+                    st.write("Choose an appropriete target variable")
+                else:
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+                        data, features, target, knn, cv, length)
+                    data_t = view(data, target, length,
+                                  predictions, predictions_p, y_test)
+                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                        "precision_score": [p], "recall_score": [p],
+                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                    tab.index = [""] * len(tab)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                    """,
+                                unsafe_allow_html=True)
 
-                st.table(tab)
+                    st.table(tab)
 
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                """,
-                            unsafe_allow_html=True)
-                retention = (
-                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                churn = (
-                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                st.write("Retention rate: "+str(retention)+"%")
-                st.write("Churn rate: "+str(churn)+"%")
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                    """,
+                                unsafe_allow_html=True)
+                    retention = (
+                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                    churn = (
+                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                    st.write("Retention rate: "+str(retention)+"%")
+                    st.write("Churn rate: "+str(churn)+"%")
 
-                st.sidebar.markdown(download_link(
-                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+                    st.sidebar.markdown(download_link(
+                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "Logistic Regression":
             params = ["penalty", "solver"]
@@ -550,32 +584,41 @@ def main_content():
             if st.sidebar.button("Predicting"):
                 lr = LogisticRegression(
                     random_state=0, penalty=penalty, solver=solver)
-                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    data, features, target, lr, cv, length)
-                data_t = view(data, target, length, predictions, predictions_p)
-                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                    "precision_score": [p], "recall_score": [p],
-                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                tab.index = [""] * len(tab)
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                """,
-                            unsafe_allow_html=True)
+                if not features:
+                    st.write("You have to choose some features for training")
+                elif good_target == False:
+                    st.write("Choose an appropriete target variable")
+                else:
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+                        data, features, target, lr, cv, length)
+                    data_t = view(data, target, length,
+                                  predictions, predictions_p, y_test)
+                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                        "precision_score": [p], "recall_score": [p],
+                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                    tab.index = [""] * len(tab)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                    """,
+                                unsafe_allow_html=True)
 
-                st.table(tab)
+                    st.table(tab)
 
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                """,
-                            unsafe_allow_html=True)
-                retention = (
-                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                churn = (
-                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                st.write("Retention rate: "+str(retention)+"%")
-                st.write("Churn rate: "+str(churn)+"%")
-                st.sidebar.markdown(download_link(
-                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                    """,
+                                unsafe_allow_html=True)
+                    retention = (
+                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                    churn = (
+                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                    st.write("Retention rate: "+str(retention)+"%")
+                    st.write("Churn rate: "+str(churn)+"%")
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+                    st.sidebar.markdown(download_link(
+                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "SgdClassifier":
             params = ["loss", "penalty"]
@@ -596,33 +639,42 @@ def main_content():
                     )
             if st.sidebar.button("Predicting"):
                 sc = SGDClassifier(random_state=0, loss=loss, penalty=penalty)
-                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    data, features, target, sc, cv, length)
-                data_t = view(data, target, length, predictions, predictions_p)
-                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                    "precision_score": [p], "recall_score": [p],
-                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                tab.index = [""] * len(tab)
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                """,
-                            unsafe_allow_html=True)
+                if not features:
+                    st.write("You have to choose some features for training")
+                elif good_target == False:
+                    st.write("Choose an appropriete target variable")
+                else:
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+                        data, features, target, sc, cv, length)
+                    data_t = view(data, target, length,
+                                  predictions, predictions_p, y_test)
+                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                        "precision_score": [p], "recall_score": [p],
+                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                    tab.index = [""] * len(tab)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                    """,
+                                unsafe_allow_html=True)
 
-                st.table(tab)
+                    st.table(tab)
 
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                """,
-                            unsafe_allow_html=True)
-                retention = (
-                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                churn = (
-                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                st.write("Retention rate: "+str(retention)+"%")
-                st.write("Churn rate: "+str(churn)+"%")
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                    """,
+                                unsafe_allow_html=True)
+                    retention = (
+                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                    churn = (
+                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                    st.write("Retention rate: "+str(retention)+"%")
+                    st.write("Churn rate: "+str(churn)+"%")
 
-                st.sidebar.markdown(download_link(
-                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+                    st.sidebar.markdown(download_link(
+                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "SVClassification":
             params = ["kernel", "degree"]
@@ -643,33 +695,42 @@ def main_content():
             if st.sidebar.button("Predicting"):
                 sv = SVC(random_state=0, kernel=kernel,
                          degree=degree, probability=True)
-                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    data, features, target, sv, cv, length)
-                data_t = view(data, target, length, predictions, predictions_p)
-                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                    "precision_score": [p], "recall_score": [p],
-                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                tab.index = [""] * len(tab)
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                """,
-                            unsafe_allow_html=True)
+                if not features:
+                    st.write("You have to choose some features for training")
+                elif good_target == False:
+                    st.write("Choose an appropriete target variable")
+                else:
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+                        data, features, target, sv, cv, length)
+                    data_t = view(data, target, length,
+                                  predictions, predictions_p, y_test)
+                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                        "precision_score": [p], "recall_score": [p],
+                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                    tab.index = [""] * len(tab)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                    """,
+                                unsafe_allow_html=True)
 
-                st.table(tab)
+                    st.table(tab)
 
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                """,
-                            unsafe_allow_html=True)
-                retention = (
-                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                churn = (
-                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                st.write("Retention rate: "+str(retention)+"%")
-                st.write("Churn rate: "+str(churn)+"%")
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                    """,
+                                unsafe_allow_html=True)
+                    retention = (
+                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                    churn = (
+                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                    st.write("Retention rate: "+str(retention)+"%")
+                    st.write("Churn rate: "+str(churn)+"%")
 
-                st.sidebar.markdown(download_link(
-                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+                    st.sidebar.markdown(download_link(
+                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
 
 def deal_with_NaN(data, col_with_NaN):
@@ -707,30 +768,18 @@ def corr_matrix(data):
 
 
 def preprocessing(data):
-    # data = create_dummy_and_encoding(data)
-    # data = imputation(data)
     X = data.drop('Exited', axis=1)
     y = data.Exited
 
-    "Test size", y.value_counts()
-
     return X, y
-
-
-# def load_model():
-#     with open('model/RandomForest', 'rb') as f:
-#         RandomForest = pickle.load(f)
-#     with open('model/XGBoostClassifier', 'rb') as f:
-#         XGBOOST = pickle.load(f)
-
-#     return RandomForest, XGBOOST
 
 
 def evaluation(model, X_train, y_train, X_test, y_test, cv):
     model.fit(X_train, y_train)
     ypred = model.predict(X_test)
-
+    st.write("Correlation Matrix")
     st.write(confusion_matrix(y_test, ypred))
+    st.write("Classification Repport")
     st.write(classification_report(y_test, ypred))
 
     N, train_scores, test_scores = learning_curve(model, X_train, y_train, train_sizes=np.linspace(0.1, 1, 10),
@@ -741,55 +790,57 @@ def evaluation(model, X_train, y_train, X_test, y_test, cv):
     ax = plt.plot(N, train_scores.mean(axis=1), label='train score')
     ax = plt.plot(N, test_scores.mean(axis=1), label='test score')
     ax = plt.title(
-        "Learning curve for accuracy: This show us if the model don't overfit")
+        "Learning curve for accuracy: This show us if the model overfit")
     plt.legend()
     st.pyplot(fig)
 
     return model
 
 
-def modelisation_content(data):
-    st.markdown("""
-        <h1 style="font-size: 50px; color:#DE781F" >Modelisation</h1>
-        <div>We find in our previous analysis(EDA) that wa have an unbalanced Dataset. So, we can perform SMOTE Analysis to solve the issue or use another metric like <em style = "font-weight:bold; color:#1F85DE">Precision</em>, <em style = "color:#1F85DE; font-weight :bold">Recall</em> or <em style = "color:#1F85DE; font-weight :bold">F1_Score</em> if we want to be more rigourous.</div>
-        """, unsafe_allow_html=True)
-    st.sidebar.subheader("Train set size")
-    train_size = st.sidebar.slider(
-        "Train", min_value=0.2, max_value=0.9, value=0.8)
+# def modelisation_content(data):
+#     st.markdown("""
+#         <h1 style="font-size: 50px; color:#DE781F" >Modelisation</h1>
+#         <div>We find in our previous analysis(EDA) that wa have an unbalanced Dataset. So, we can perform SMOTE Analysis to solve the issue or use another metric like <em style = "font-weight:bold; color:#1F85DE">Precision</em>, <em style = "color:#1F85DE; font-weight :bold">Recall</em> or <em style = "color:#1F85DE; font-weight :bold">F1_Score</em> if we want to be more rigourous.</div>
+#         """, unsafe_allow_html=True)
+#     st.sidebar.subheader("Train set size")
+#     train_size = st.sidebar.slider(
+#         "Train", min_value=0.2, max_value=0.9, value=0.8)
 
-    # if st.sidebar.button("Submit"):
-    smote = st.sidebar.radio("Smote Analysis ?", ["Yes", "No"])
-    list_of_algo = st.sidebar.multiselect("choose an algorithm", [
-                                          'Random Forest Classifier', 'AdaBoostClassifier', 'XGBOOSTClassifer', 'KNN', 'SVM'])
+#     # if st.sidebar.button("Submit"):
+#     smote = st.sidebar.radio("Smote Analysis ?", ["Yes", "No"])
+#     list_of_algo = st.sidebar.multiselect("choose an algorithm", [
+#                                           'Random Forest Classifier', 'AdaBoostClassifier', 'XGBOOSTClassifer', 'KNN', 'SVM'])
 
-    st.sidebar.text(
-        'Random Forest and XGBOOST are pre-trained and they show the best perofrmance for this particular problem !!')
-    test_size = 1 - float(train_size)
-    trainset, testset = train_test_split(
-        data, test_size=test_size, random_state=0)
+#     st.sidebar.text(
+#         'Random Forest and XGBOOST are pre-trained and they show the best perofrmance for this particular problem !!')
+#     test_size = 1 - float(train_size)
+#     trainset, testset = train_test_split(
+#         data, test_size=test_size, random_state=0)
 
-    X_train, y_train = preprocessing(trainset)
-    X_test, y_test = preprocessing(testset)
+#     X_train, y_train = preprocessing(trainset)
+#     "Y_train Size", y_train.shape
+#     X_test, y_test = preprocessing(testset)
+#     "Y_test Size", y_train.shape
 
-    st.subheader("Trainset after Preprocessing")
-    st.write(X_train.head(5))
+#     st.subheader("Trainset after Preprocessing")
+#     st.write(X_train.head(5))
 
-    st.subheader("Target Variable")
-    st.write(y_train.head(5))
+#     st.subheader("Target Variable")
+#     st.write(y_train.head(5))
 
-    if ('Random Forest Classifier' or 'XGBOOSTClassifer') in list_of_algo:
-        predict = st.sidebar.button('PREDICT')
-        if predict:
-            RandomForest, XGBOOST = load_model()
-            y_pred_random_forest = RandomForest.predict(X_test)
-            y_pred_xgboost = XGBOOST.predict(X_test)
-            st.subheader("Predicted values with RandomForest")
-            val = pd.DataFrame(
-                {'True value': y_test, 'Predicted Values': y_pred_random_forest})
-            st.dataframe(val.style.highlight_max(axis=0))
-            st.help(st.dataframe)
-            st.subheader("Predicted values with XGBOOST")
-            st.write(y_pred_xgboost)
+#     if ('Random Forest Classifier' or 'XGBOOSTClassifer') in list_of_algo:
+#         predict = st.sidebar.button('PREDICT')
+#         if predict:
+#             RandomForest, XGBOOST = load_model()
+#             y_pred_random_forest = RandomForest.predict(X_test)
+#             y_pred_xgboost = XGBOOST.predict(X_test)
+#             st.subheader("Predicted values with RandomForest")
+#             val = pd.DataFrame(
+#                 {'True value': y_test, 'Predicted Values': y_pred_random_forest})
+#             st.dataframe(val.style.highlight_max(axis=0))
+#             st.help(st.dataframe)
+#             st.subheader("Predicted values with XGBOOST")
+#             st.write(y_pred_xgboost)
 
 
 def main():
