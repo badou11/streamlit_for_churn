@@ -210,9 +210,14 @@ def main_content():
     st.markdown("""
         <h1 style="font-size: 50px; color:#DE781F" >Churn Prediction App</h1>
         """, unsafe_allow_html=True)
+    # st.markdown("""
+    #     Hello world :smiley:. You can download the project just here -->
+    #     """)
+
     st.markdown("""
-        Hello world ! What's going on :smiley:
-        """)
+        Hello world :smiley:. You can see the project here--> <a href="https://github.com/badou11/streamlit_for_churn"/> Link</a>
+        """,
+                unsafe_allow_html=True)
 
     st.sidebar.markdown("""
             <h2 style="font-size: 15px;">Navigation</h2>
