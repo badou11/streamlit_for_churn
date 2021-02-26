@@ -1,3 +1,4 @@
+import plotly.graph_objects as go
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.svm import SVC
@@ -27,6 +28,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
+
 # --------------------------------------------
 
 
@@ -111,56 +113,70 @@ def customized_plot(type_of_plot, columns, data, target, bins=0):
 def target_info(data, target):
     st.text('Value Counts By Target/Class')
     st.write(data[target].value_counts(normalize=True))
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
     st.write(data.iloc[:, -1].value_counts().plot.pie())
-    ax = data.iloc[:, -1].value_counts().plot.pie(autopct='%.1f%%', labels=['Stayed', 'Exited'], figsize=(3, 3),
-                                                  fontsize=6)
-    plt.title('Statistic of Churn', fontsize=8)
-    st.pyplot(fig)
+
+    # fig = px.pie(data, values=data[target].value_counts(), names=data[target].unique(),
+    #              title="statistic of "+target, labels={0: 'Stayed', 1: 'Exited'})
+
+    fig = go.Figure(
+        data=[go.Pie(labels=['Stayed', 'Exited'], values=data[target].value_counts())])
+
+    fig.update_layout(title='Statistic of '+target, title_x=0.5, font_size=20)
+    st.plotly_chart(fig)
 
     return data[target].value_counts(normalize=True)
 
 
-def core(df, features, target, model, cv, length):
-    train = df[:int(len(df)*(length[1]*0.01))]
-    test = df[int(len(df)*(length[1]*0.01)):]
+def core(data, features, target, model, cv, length):
+    # train = data[:int(len(data)*(length[1]*0.01))]
+    # test = data[int(len(data)*(length[1]*0.01)):]
 
-    model.fit(train[features], train[target])
-    predictions = model.predict(test[features])
-    predictions_p = model.predict_proba(test[features])
-    accuracy = accuracy_score(test[target], predictions)
-    f_score = f1_score(test[target], predictions, average="macro")
-    p = precision_score(test[target], predictions, average="macro")
-    r = recall_score(test[target], predictions, average="macro")
-    ras = roc_auc_score(test[target], predictions_p[:, 1])
+    trainset, testset = train_test_split(data, train_size=length)
+    X_train, y_train = preprocessing(trainset)
+    X_test, y_test = preprocessing(testset)
+
+    # st.subheader("Trainset after Preprocessing")
+    # st.write(X_train.head(5))
+
+    evaluation(model, X_train, y_train, X_test, y_test, cv)
+
+    predictions = model.predict(X_test)
+    predictions_p = model.predict_proba(X_test)
+    st.write(predictions_p)
+    accuracy = accuracy_score(y_test, predictions)
+    f_score = f1_score(y_test, predictions, average="macro")
+    p = precision_score(y_test, predictions, average="macro")
+    r = recall_score(y_test, predictions, average="macro")
+    ras = roc_auc_score(y_test, predictions_p[:, 1])
     accuracy_cv = 0
     if cv > 0:
-        scores = cross_validate(model, df[features], df[target], cv=cv)
+        scores = cross_validate(model, data[features], data[target], cv=cv)
         accuracy_cv = np.mean(scores["test_score"])
-    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv
+    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test
 
 
-def view(df, target, length, predictions, predictions_p):
-    test = df[int(len(df)*(length[1]*0.01)):]
-    df_t = pd.DataFrame({"actual": test[target],
-                         "predictions": predictions,
-                         "predictions_proba": predictions_p[:, 1]})
-    st.write(df_t)
+def view(data, target, length, predictions, predictions_p, y_test):
+    # test = data[int(len(data)*(length[1]*0.01)):]
+    data_t = pd.DataFrame({"actual": y_test,
+                           "predictions": predictions,
+                           "predictions_proba": predictions_p[:, 1]})
+    st.write(data_t)
     st.markdown("""
             <h6 style="font-size: 10px;">The column "predictions_proba" allows to determine the probability of success of the predicted value compared to 1.</h6>
             """,
                 unsafe_allow_html=True)
 
     labels = ['actual_1', 'predictions_1', 'actual_0', 'predictions_0']
-    values = [len(df_t.loc[df_t["actual"] == 1, "actual"]), len(df_t.loc[df_t["predictions"] == 1, "predictions"]),
-              len(df_t.loc[df_t["actual"] == 0, "actual"]), len(df_t.loc[df_t["predictions"] == 0, "predictions"])]
+    values = [len(data_t.loc[data_t["actual"] == 1, "actual"]), len(data_t.loc[data_t["predictions"] == 1, "predictions"]),
+              len(data_t.loc[data_t["actual"] == 0, "actual"]), len(data_t.loc[data_t["predictions"] == 0, "predictions"])]
 
     fig = px.bar(x=labels, y=values, width=620, height=420,
                  title="Actual and Predicted values of 0 and 1")
     fig.update_xaxes(title_text='values')
     fig.update_yaxes(title_text='number of values ​​present')
     st.plotly_chart(fig)
-    return df_t
+    return data_t
 
 
 def main_content():
@@ -203,6 +219,7 @@ def main_content():
             'Choose the Target Variable : ', data.columns)
         if len(data[target].unique()) > 2:
             st.sidebar.warning("This variable have too much unique value")
+            good_target = False
         elif data.dtypes[target] == 'object':
             st.sidebar.write(data[target].unique())
             st.sidebar.write(
@@ -214,13 +231,20 @@ def main_content():
             if st.sidebar.button("submit"):
                 data[target] = data[target].map(
                     {data[target].unique()[0]: int(input1), data[target].unique()[1]: int(input2)})
+
                 st.write(data)
+                target_balance = target_info(data, target)
+                good_target = True
         else:
             st.sidebar.info("We are good to go :smiley:")
             target_balance = target_info(data, target)
+            good_target = True
+        try:
             if target_balance[0] > 2*target_balance[1]:
                 st.sidebar.write("this dataset is unbalanced")
                 smote = st.sidebar.radio("smote method ?", ["Yes", "No"])
+        except:
+            pass
 
         st.sidebar.markdown("""
             <h2 style="font-size: 15px;">Visualizing</h2>
@@ -272,10 +296,9 @@ def main_content():
             "Features", data.drop(target, axis=1).columns)
 
         if features:
-            data_for_ML = data[features]
-            # st.write(data_for_ML)
+            data = data[features + [target]]
 
-            cat_variable = data_for_ML.select_dtypes(
+            cat_variable = data.select_dtypes(
                 'object').columns.to_list()
             if len(cat_variable) != 0:
                 st.sidebar.write(f"{cat_variable} are categorical data")
@@ -284,17 +307,17 @@ def main_content():
 
                 if choice == 'OneHotEncoding':
                     try:
-                        data_for_ML = pd.get_dummies(
-                            data=data_for_ML, columns=cat_variable, drop_first=True)
-                        st.write(data_for_ML)
+                        data = pd.get_dummies(
+                            data=data, columns=cat_variable, drop_first=True)
+                        st.write(data)
                     except:
                         st.sidebar.write('Choose only one option')
                 else:
                     try:
                         encoder = LabelEncoder()
-                        data_for_ML[cat_variable] = encoder.fit_transform(
-                            data_for_ML[cat_variable])
-                        st.write(data_for_ML)
+                        data[cat_variable] = encoder.fit_transform(
+                            data[cat_variable])
+                        st.write(data)
                     except:
                         st.sidebar.write('Choose only one option')
 
@@ -316,7 +339,8 @@ def main_content():
              "KnnClassifier",
              "Logistic Regression",
              "SgdClassifier",
-             "SVClassification"
+             "SVClassification",
+             "XGBoostClassifier"
              ])
         if model == "Decision Tree":
             params = ["criterion", "max_depth", "max_features",
@@ -353,33 +377,39 @@ def main_content():
             if st.sidebar.button("Predicting"):
                 dt = DecisionTreeClassifier(random_state=0, criterion=criterion, max_depth=max_depth,
                                             max_features=max_features, min_samples_leaf=min_samples_leaf, min_samples_split=min_samples_split)
-                predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    df, features, target, dt, cv, length)
-                df_t = view(df, target, length, predictions, predictions_p)
-                tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                    "precision_score": [p], "recall_score": [p],
-                                    "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                tab.index = [""] * len(tab)
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                """,
-                            unsafe_allow_html=True)
+                if not features:
+                    st.write("You have to choose some features for training")
+                elif good_target == False:
+                    st.write("Choose an appropriete target variable")
+                else:
+                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test = core(
+                        data, features, target, dt, cv, length)
+                    data_t = view(data, target, length,
+                                  predictions, predictions_p, y_test)
+                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                        "precision_score": [p], "recall_score": [p],
+                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                    tab.index = [""] * len(tab)
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                    """,
+                                unsafe_allow_html=True)
 
-                st.table(tab)
+                    st.table(tab)
 
-                st.markdown("""
-                <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                """,
-                            unsafe_allow_html=True)
-                retention = (
-                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
-                churn = (
-                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
-                st.write("Retention rate: "+str(retention)+"%")
-                st.write("Churn rate: "+str(churn)+"%")
+                    st.markdown("""
+                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                    """,
+                                unsafe_allow_html=True)
+                    retention = (
+                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                    churn = (
+                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                    st.write("Retention rate: "+str(retention)+"%")
+                    st.write("Churn rate: "+str(churn)+"%")
 
-                st.sidebar.markdown(download_link(
-                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    st.sidebar.markdown(download_link(
+                        data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "Random Forest":
             params = ["n_estimators", "criterion", "max_depth",
@@ -422,8 +452,8 @@ def main_content():
                 rf = RandomForestClassifier(random_state=0, n_estimators=n_estimators, criterion=criterion, max_depth=max_depth,
                                             max_features=max_features, min_samples_leaf=min_samples_leaf, min_samples_split=min_samples_split)
                 predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    df, features, target, rf, cv, length)
-                df_t = view(df, target, length, predictions, predictions_p)
+                    data, features, target, rf, cv, length)
+                data_t = view(data, target, length, predictions, predictions_p)
                 tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
                                     "precision_score": [p], "recall_score": [p],
                                     "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
@@ -440,14 +470,14 @@ def main_content():
                 """,
                             unsafe_allow_html=True)
                 retention = (
-                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
                 churn = (
-                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
                 st.write("Retention rate: "+str(retention)+"%")
                 st.write("Churn rate: "+str(churn)+"%")
 
                 st.sidebar.markdown(download_link(
-                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "KnnClassifier":
             params = ["n_neighbors", "weights", "algorithm"]
@@ -474,8 +504,8 @@ def main_content():
                 knn = KNeighborsClassifier(
                     n_neighbors=n_neighbors, weights=weights, algorithm=algorithm)
                 predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    df, features, target, knn, cv, length)
-                df_t = view(df, target, length, predictions, predictions_p)
+                    data, features, target, knn, cv, length)
+                data_t = view(data, target, length, predictions, predictions_p)
                 tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
                                     "precision_score": [p], "recall_score": [p],
                                     "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
@@ -492,14 +522,14 @@ def main_content():
                 """,
                             unsafe_allow_html=True)
                 retention = (
-                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
                 churn = (
-                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
                 st.write("Retention rate: "+str(retention)+"%")
                 st.write("Churn rate: "+str(churn)+"%")
 
                 st.sidebar.markdown(download_link(
-                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "Logistic Regression":
             params = ["penalty", "solver"]
@@ -521,8 +551,8 @@ def main_content():
                 lr = LogisticRegression(
                     random_state=0, penalty=penalty, solver=solver)
                 predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    df, features, target, lr, cv, length)
-                df_t = view(df, target, length, predictions, predictions_p)
+                    data, features, target, lr, cv, length)
+                data_t = view(data, target, length, predictions, predictions_p)
                 tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
                                     "precision_score": [p], "recall_score": [p],
                                     "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
@@ -539,13 +569,13 @@ def main_content():
                 """,
                             unsafe_allow_html=True)
                 retention = (
-                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
                 churn = (
-                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
                 st.write("Retention rate: "+str(retention)+"%")
                 st.write("Churn rate: "+str(churn)+"%")
                 st.sidebar.markdown(download_link(
-                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "SgdClassifier":
             params = ["loss", "penalty"]
@@ -567,8 +597,8 @@ def main_content():
             if st.sidebar.button("Predicting"):
                 sc = SGDClassifier(random_state=0, loss=loss, penalty=penalty)
                 predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    df, features, target, sc, cv, length)
-                df_t = view(df, target, length, predictions, predictions_p)
+                    data, features, target, sc, cv, length)
+                data_t = view(data, target, length, predictions, predictions_p)
                 tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
                                     "precision_score": [p], "recall_score": [p],
                                     "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
@@ -585,14 +615,14 @@ def main_content():
                 """,
                             unsafe_allow_html=True)
                 retention = (
-                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
                 churn = (
-                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
                 st.write("Retention rate: "+str(retention)+"%")
                 st.write("Churn rate: "+str(churn)+"%")
 
                 st.sidebar.markdown(download_link(
-                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "SVClassification":
             params = ["kernel", "degree"]
@@ -614,8 +644,8 @@ def main_content():
                 sv = SVC(random_state=0, kernel=kernel,
                          degree=degree, probability=True)
                 predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv = core(
-                    df, features, target, sv, cv, length)
-                df_t = view(df, target, length, predictions, predictions_p)
+                    data, features, target, sv, cv, length)
+                data_t = view(data, target, length, predictions, predictions_p)
                 tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
                                     "precision_score": [p], "recall_score": [p],
                                     "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
@@ -632,14 +662,14 @@ def main_content():
                 """,
                             unsafe_allow_html=True)
                 retention = (
-                    len(df_t.loc[df_t["predictions"] == 0, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
                 churn = (
-                    len(df_t.loc[df_t["predictions"] == 1, "predictions"])/len(df_t))*100
+                    len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
                 st.write("Retention rate: "+str(retention)+"%")
                 st.write("Churn rate: "+str(churn)+"%")
 
                 st.sidebar.markdown(download_link(
-                    df_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                    data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
 
 def deal_with_NaN(data, col_with_NaN):
@@ -662,55 +692,60 @@ def corr_matrix(data):
     st.pyplot(fig)
 
 
-def create_dummy_and_encoding(data):
-    col_to_drop = ['RowNumber', 'CustomerId', 'Surname']
-    for col in col_to_drop:
-        if col in data.columns:
-            data.drop(col, axis=1, inplace=True)
-    data.loc[:, 'Gender'] = data.loc[:, 'Gender'].map({'Female': 0, 'Male': 1})
-    data = pd.get_dummies(data=data, drop_first=True)
-    return data
+# def create_dummy_and_encoding(data):
+#     col_to_drop = ['RowNumber', 'CustomerId', 'Surname']
+#     for col in col_to_drop:
+#         if col in data.columns:
+#             data.drop(col, axis=1, inplace=True)
+#     data.loc[:, 'Gender'] = data.loc[:, 'Gender'].map({'Female': 0, 'Male': 1})
+#     data = pd.get_dummies(data=data, drop_first=True)
+#     return data
 
 
-def imputation(df):
-    return df.dropna(axis=0)
+# def imputation(data):
+#     return data.dropna(axis=0)
 
 
 def preprocessing(data):
-    data = create_dummy_and_encoding(data)
-    data = imputation(data)
+    # data = create_dummy_and_encoding(data)
+    # data = imputation(data)
     X = data.drop('Exited', axis=1)
     y = data.Exited
 
-    print(y.value_counts())
+    "Test size", y.value_counts()
 
     return X, y
 
 
-def load_model():
-    with open('model/RandomForest', 'rb') as f:
-        RandomForest = pickle.load(f)
-    with open('model/XGBoostClassifier', 'rb') as f:
-        XGBOOST = pickle.load(f)
+# def load_model():
+#     with open('model/RandomForest', 'rb') as f:
+#         RandomForest = pickle.load(f)
+#     with open('model/XGBoostClassifier', 'rb') as f:
+#         XGBOOST = pickle.load(f)
 
-    return RandomForest, XGBOOST
+#     return RandomForest, XGBOOST
 
 
-def evaluation(model, X_train, y_train, X_test, y_test):
+def evaluation(model, X_train, y_train, X_test, y_test, cv):
     model.fit(X_train, y_train)
     ypred = model.predict(X_test)
 
-    print(confusion_matrix(y_test, ypred))
-    print(classification_report(y_test, ypred))
+    st.write(confusion_matrix(y_test, ypred))
+    st.write(classification_report(y_test, ypred))
 
     N, train_scores, test_scores = learning_curve(model, X_train, y_train, train_sizes=np.linspace(0.1, 1, 10),
-                                                  cv=10, scoring='f1')
+                                                  cv=10)
 
-    plt.figure(figsize=(12, 8))
-    plt.plot(N, train_scores.mean(axis=1), label='train score')
-    plt.plot(N, test_scores.mean(axis=1), label='test score')
+    fig = plt.subplots()
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.plot(N, train_scores.mean(axis=1), label='train score')
+    ax = plt.plot(N, test_scores.mean(axis=1), label='test score')
+    ax = plt.title(
+        "Learning curve for accuracy: This show us if the model don't overfit")
     plt.legend()
-    plt.show()
+    st.pyplot(fig)
+
+    return model
 
 
 def modelisation_content(data):
@@ -766,10 +801,10 @@ def main():
 if __name__ == '__main__':
     main()
 
-# def highlight_max(df):
+# def highlight_max(data):
 #     '''
 #     highlight the maximum in a Series yellow.
 #     '''
-#     if df.iloc[:, 0] == df.iloc[:, 1]
+#     if data.iloc[:, 0] == data.iloc[:, 1]
 
 #         return ['background-color: yellow' if v else '' for v in is_max]
