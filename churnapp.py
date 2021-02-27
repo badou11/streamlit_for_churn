@@ -182,7 +182,7 @@ def core(data, features, target, model, cv, length):
     if cv > 0:
         scores = cross_validate(model, data[features], data[target], cv=cv)
         accuracy_cv = np.mean(scores["test_score"])
-    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test
+    return predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, testset
 
 
 def view(data, target, length, predictions, predictions_p, y_test):
@@ -211,9 +211,6 @@ def main_content():
     st.markdown("""
         <h1 style="font-size: 50px; color:#DE781F" >Churn Prediction App</h1>
         """, unsafe_allow_html=True)
-    # st.markdown("""
-    #     Hello world :smiley:. You can download the project just here -->
-    #     """)
 
     st.markdown("""
         Hello world :smiley:. You can see the project here--> <a href="https://github.com/badou11/streamlit_for_churn"/> Link</a>
@@ -272,7 +269,7 @@ def main_content():
                 data[target] = data[target].map(
                     {data[target].unique()[0]: int(input1), data[target].unique()[1]: int(input2)})
             except:
-                st.write("error sama way !!!!")
+                st.write("error !!!!")
 
         else:
             st.sidebar.info("We are good to go :smiley:")
@@ -380,7 +377,6 @@ def main_content():
              "Logistic Regression",
              #  "SgdClassifier",
              "SVClassification",
-             #  "XGBoostClassifier"
              ])
         if model == "Decision Tree":
             params = ["criterion", "max_depth", "max_features",
@@ -436,7 +432,6 @@ def main_content():
                     <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
                     """,
                                 unsafe_allow_html=True)
-
                     st.table(tab)
 
                     st.markdown("""
@@ -450,8 +445,11 @@ def main_content():
                     st.write("Retention rate: "+str(retention)+"%")
                     st.write("Churn rate: "+str(churn)+"%")
 
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
                     st.sidebar.markdown(download_link(
-                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                        pd.concat([X_test.drop(columns=target), data_t["predictions"]], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "Random Forest":
             params = ["n_estimators", "criterion", "max_depth",
@@ -526,8 +524,11 @@ def main_content():
                     st.write("Retention rate: "+str(retention)+"%")
                     st.write("Churn rate: "+str(churn)+"%")
 
+                    # st.sidebar.markdown(download_link(
+                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
                     st.sidebar.markdown(download_link(
-                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                        pd.concat([X_test.drop(columns=target), data_t["predictions"]], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "KnnClassifier":
             params = ["n_neighbors", "weights", "algorithm"]
@@ -590,7 +591,7 @@ def main_content():
                     #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
                     st.sidebar.markdown(download_link(
-                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                        pd.concat([X_test.drop(columns=target), data_t["predictions"]], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "Logistic Regression":
             params = ["penalty", "solver"]
@@ -610,9 +611,11 @@ def main_content():
                     )
             try:
                 if penalty == "l1" and solver in ['newton-cg', 'sag', 'lbfgs']:
-                    st.error("L1 don't work with " + solver+". But, it work well with 'liblinear' and 'saga' ")
+                    st.error("L1 don't work with " + solver +
+                             ". But, it work well with 'liblinear' and 'saga' ")
                 if penalty == 'elasticnet' and solver != 'saga':
-                    st.error("elasticnet don't work with " + solver+ ". But it work well with saga.")
+                    st.error("elasticnet don't work with " +
+                             solver + ". But it work well with saga.")
                 else:
 
                     if st.sidebar.button("Predicting"):
@@ -654,8 +657,8 @@ def main_content():
                             # st.sidebar.markdown(download_link(
                             #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
-                            st.sidebar.markdown(download_link(
-                                pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                            st.sidebar.markdown(download_link(pd.concat([X_test.drop(
+                                columns=target), data_t["predictions"]], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
             except:
                 st.warning("Choose another solver or another penalty")
@@ -807,7 +810,7 @@ def main_content():
                     st.write("Churn rate: "+str(churn)+"%")
 
                     st.sidebar.markdown(download_link(
-                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                        pd.concat([X_test.drop(columns=target), data_t["predictions"]], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
 
 def deal_with_NaN(data, col_with_NaN):
@@ -822,12 +825,6 @@ def deal_with_NaN(data, col_with_NaN):
 
     if choice == "Drop Columns with NaN":
         return data.drop(columns=col_with_NaN)
-
-
-def corr_matrix(data):
-    fig, ax = plt.subplots()
-    ax = sns.heatmap(data.corr(), annot=True, cbar=False)
-    st.pyplot(fig)
 
 
 def preprocessing(data, target):
@@ -866,11 +863,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# def highlight_max(data):
-#     '''
-#     highlight the maximum in a Series yellow.
-#     '''
-#     if data.iloc[:, 0] == data.iloc[:, 1]
-
-#         return ['background-color: yellow' if v else '' for v in is_max]
