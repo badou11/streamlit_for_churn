@@ -364,6 +364,8 @@ def main_content():
                         st.sidebar.write('Choose only one option')
                 else:
                     st.sidebar.warning("You have to choose an option")
+            else:
+                cat_encoder = True
 
         st.sidebar.markdown("""
             <h2 style="font-size: 15px;">Modeling</h2>
