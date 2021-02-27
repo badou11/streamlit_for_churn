@@ -139,9 +139,9 @@ def customized_plot(type_of_plot, columns, data, target, bins=0):
                     fig, ax = plt.subplots()
                     fig = plt.figure(figsize=(16, 9))
                     ax = sns.distplot(
-                        data[data['Exited'] == 1][col], label="Exited")
+                        data[data[target] == 1][col], label="Exited")
                     ax = sns.distplot(
-                        data[data['Exited'] == 0][col], label="Stayed")
+                        data[data[target] == 0][col], label="Stayed")
                     plt.legend()
                     st.pyplot(fig)
 
@@ -163,9 +163,9 @@ def target_info(data, target):
 def core(data, features, target, model, cv, length):
 
     trainset, testset = train_test_split(data, train_size=length)
-    X_train, y_train = preprocessing(trainset)
+    X_train, y_train = preprocessing(trainset, target)
     "Train size", y_train.value_counts()
-    X_test, y_test = preprocessing(testset)
+    X_test, y_test = preprocessing(testset, target)
     "Test size", y_test.value_counts()
 
     evaluation(model, X_train, y_train, X_test, y_test, cv)
@@ -263,14 +263,21 @@ def main_content():
             if st.sidebar.button("submit"):
                 data[target] = data[target].map(
                     {data[target].unique()[0]: int(input1), data[target].unique()[1]: int(input2)})
-
                 st.write(data)
                 target_balance = target_info(data, target)
-                good_target = True
+            good_target = True
+
+            try:
+                data[target] = data[target].map(
+                    {data[target].unique()[0]: int(input1), data[target].unique()[1]: int(input2)})
+            except:
+                st.write("error sama way !!!!")
+
         else:
             st.sidebar.info("We are good to go :smiley:")
             target_balance = target_info(data, target)
             good_target = True
+
         try:
             if target_balance[0] > 2*target_balance[1]:
                 st.sidebar.write("this dataset is unbalanced")
@@ -333,6 +340,7 @@ def main_content():
             cat_variable = data.select_dtypes(
                 'object').columns.to_list()
             if len(cat_variable) != 0:
+                cat_encoder = False
                 st.sidebar.write(f"{cat_variable} are categorical data")
                 choice = st.sidebar.selectbox(f"Would you like to create dummies for them ?", [
                                               'Choose an options', 'OneHotEncoding', 'LabelEncoding'])
@@ -342,6 +350,7 @@ def main_content():
                         data = pd.get_dummies(
                             data=data, columns=cat_variable, drop_first=True)
                         st.write(data)
+                        cat_encoder = True
                     except:
                         st.sidebar.write('Choose only one option')
                 elif choice == 'LabelEncoding':
@@ -349,6 +358,7 @@ def main_content():
                         encoder = LabelEncoder()
                         for col in cat_variable:
                             data[col] = encoder.fit_transform(data[col])
+                            cat_encoder = True
                         st.write(data)
                     except:
                         st.sidebar.write('Choose only one option')
@@ -360,7 +370,7 @@ def main_content():
             """,
                             unsafe_allow_html=True)
         length = st.sidebar.slider(
-            "Train size", min_value=0.2, max_value=0.9, value=0.8)
+            "Train size", min_value=0.1, max_value=0.9, value=0.8)
 
         cv = st.sidebar.selectbox(
             "Cross Validation on the train",
@@ -368,11 +378,11 @@ def main_content():
 
         model = st.sidebar.selectbox(
             "Which model do you like!",
-            ["Random Forest",
+            ["Decision Tree",
+             "Random Forest",
              "KnnClassifier",
              "Logistic Regression",
              "SgdClassifier",
-             "Decision Tree",
              "SVClassification",
              "XGBoostClassifier"
              ])
@@ -415,6 +425,8 @@ def main_content():
                     st.write("You have to choose some features for training")
                 elif good_target == False:
                     st.write("Choose an appropriete target variable")
+                elif cat_encoder == False:
+                    st.error("You have to encode some variable")
                 else:
                     predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
                         data, features, target, dt, cv, length)
@@ -489,6 +501,8 @@ def main_content():
                     st.write("You have to choose some features for training")
                 elif good_target == False:
                     st.write("Choose an appropriete target variable")
+                elif cat_encoder == False:
+                    st.error("You have to encode some variable")
                 else:
                     predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
                         data, features, target, rf, cv, length)
@@ -550,6 +564,8 @@ def main_content():
                     st.write("You have to choose some features for training")
                 elif good_target == False:
                     st.write("Choose an appropriete target variable")
+                elif cat_encoder == False:
+                    st.error("You have to encode some variable")
                 else:
                     predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
                         data, features, target, knn, cv, length)
@@ -606,6 +622,8 @@ def main_content():
                     st.write("You have to choose some features for training")
                 elif good_target == False:
                     st.write("Choose an appropriete target variable")
+                elif cat_encoder == False:
+                    st.error("You have to encode some variable")
                 else:
                     predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
                         data, features, target, lr, cv, length)
@@ -714,6 +732,8 @@ def main_content():
                     st.write("You have to choose some features for training")
                 elif good_target == False:
                     st.write("Choose an appropriete target variable")
+                elif cat_encoder == False:
+                    st.error("You have to encode some variable")
                 else:
                     predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
                         data, features, target, sv, cv, length)
@@ -765,9 +785,9 @@ def corr_matrix(data):
     st.pyplot(fig)
 
 
-def preprocessing(data):
-    X = data.drop('Exited', axis=1)
-    y = data.Exited
+def preprocessing(data, target):
+    X = data.drop(target, axis=1)
+    y = data[target]
 
     return X, y
 
