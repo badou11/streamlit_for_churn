@@ -526,9 +526,6 @@ def main_content():
                     st.write("Retention rate: "+str(retention)+"%")
                     st.write("Churn rate: "+str(churn)+"%")
 
-                    # st.sidebar.markdown(download_link(
-                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
-
                     st.sidebar.markdown(download_link(
                         pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
@@ -613,9 +610,9 @@ def main_content():
                     )
             try:
                 if penalty == "l1" and solver in ['newton-cg', 'sag', 'lbfgs']:
-                    st.error("L1 don't work with " + solver)
+                    st.error("L1 don't work with " + solver+". But, it work well with 'liblinear' and 'saga' ")
                 if penalty == 'elasticnet' and solver != 'saga':
-                    st.error("elasticnet don't work with " + solver)
+                    st.error("elasticnet don't work with " + solver+ ". But it work well with saga.")
                 else:
 
                     if st.sidebar.button("Predicting"):
