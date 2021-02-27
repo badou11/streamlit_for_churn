@@ -162,7 +162,8 @@ def target_info(data, target):
 
 def core(data, features, target, model, cv, length):
 
-    trainset, testset = train_test_split(data, train_size=length)
+    trainset, testset = train_test_split(
+        data, train_size=length, random_state=0)
     X_train, y_train = preprocessing(trainset, target)
     "Train size", y_train.value_counts()
     X_test, y_test = preprocessing(testset, target)
@@ -278,15 +279,8 @@ def main_content():
             target_balance = target_info(data, target)
             good_target = True
 
-        try:
-            if target_balance[0] > 2*target_balance[1]:
-                st.sidebar.write("this dataset is unbalanced")
-                smote = st.sidebar.radio("smote method ?", ["Yes", "No"])
-        except:
-            pass
-
         st.sidebar.markdown("""
-            <h2 style="font-size: 15px;">Visualizing</h2>
+            <h2 style="font-size: 25px;">Visualizing</h2>
             """,
                             unsafe_allow_html=True)
         type_of_plot = st.sidebar.selectbox("Select a type of plot", [
@@ -311,7 +305,7 @@ def main_content():
                             data, target, bins=0)
 
         st.sidebar.markdown("""
-            <h2 style="font-size: 15px;">Preprocessing</h2>
+            <h2 style="font-size: 25px;">Preprocessing</h2>
             """,
                             unsafe_allow_html=True)
 
@@ -368,7 +362,7 @@ def main_content():
                 cat_encoder = True
 
         st.sidebar.markdown("""
-            <h2 style="font-size: 15px;">Modeling</h2>
+            <h2 style="font-size: 25px;">Modeling</h2>
             """,
                             unsafe_allow_html=True)
         length = st.sidebar.slider(
@@ -384,9 +378,9 @@ def main_content():
              "Random Forest",
              "KnnClassifier",
              "Logistic Regression",
-             "SgdClassifier",
+             #  "SgdClassifier",
              "SVClassification",
-             "XGBoostClassifier"
+             #  "XGBoostClassifier"
              ])
         if model == "Decision Tree":
             params = ["criterion", "max_depth", "max_features",
@@ -617,99 +611,151 @@ def main_content():
                         "enter solver value",
                         ["lbfgs", "newton-cg", "liblinear", "sag", "saga"]
                     )
-            if st.sidebar.button("Predicting"):
-                lr = LogisticRegression(
-                    random_state=0, penalty=penalty, solver=solver)
-                if not features:
-                    st.write("You have to choose some features for training")
-                elif good_target == False:
-                    st.write("Choose an appropriete target variable")
-                elif cat_encoder == False:
-                    st.error("You have to encode some variable")
+            try:
+                if penalty == "l1" and solver in ['newton-cg', 'sag', 'lbfgs']:
+                    st.error("L1 don't work with " + solver)
+                if penalty == 'elasticnet' and solver != 'saga':
+                    st.error("elasticnet don't work with " + solver)
                 else:
-                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
-                        data, features, target, lr, cv, length)
-                    data_t = view(data, target, length,
-                                  predictions, predictions_p, y_test)
-                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                        "precision_score": [p], "recall_score": [p],
-                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                    tab.index = [""] * len(tab)
-                    st.markdown("""
-                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                    """,
-                                unsafe_allow_html=True)
 
-                    st.table(tab)
+                    if st.sidebar.button("Predicting"):
+                        lr = LogisticRegression(
+                            random_state=0, penalty=penalty, solver=solver)
+                        if not features:
+                            st.write(
+                                "You have to choose some features for training")
+                        elif good_target == False:
+                            st.write("Choose an appropriete target variable")
+                        elif cat_encoder == False:
+                            st.error("You have to encode some variable")
+                        else:
+                            predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+                                data, features, target, lr, cv, length)
+                            data_t = view(data, target, length,
+                                          predictions, predictions_p, y_test)
+                            tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+                                                "precision_score": [p], "recall_score": [p],
+                                                "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+                            tab.index = [""] * len(tab)
+                            st.markdown("""
+                            <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+                            """,
+                                        unsafe_allow_html=True)
 
-                    st.markdown("""
-                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                    """,
-                                unsafe_allow_html=True)
-                    retention = (
-                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                    churn = (
-                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                    st.write("Retention rate: "+str(retention)+"%")
-                    st.write("Churn rate: "+str(churn)+"%")
-                    # st.sidebar.markdown(download_link(
-                    #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                            st.table(tab)
 
-                    st.sidebar.markdown(download_link(
-                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+                            st.markdown("""
+                            <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+                            """,
+                                        unsafe_allow_html=True)
+                            retention = (
+                                len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+                            churn = (
+                                len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+                            st.write("Retention rate: "+str(retention)+"%")
+                            st.write("Churn rate: "+str(churn)+"%")
+                            # st.sidebar.markdown(download_link(
+                            #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
-        if model == "SgdClassifier":
-            params = ["loss", "penalty"]
-            check_param = [st.sidebar.checkbox(
-                param, key=param) for param in params]
-            loss, penalty = "hinge", "l2"
-            for p in range(len(params)):
-                if check_param[p] and params[p] == "loss":
-                    loss = st.sidebar.selectbox(
-                        "enter hinge value",
-                        ["hinge", "log", "modified_huber",
-                         "squared_hinge", "perceptron"]
-                    )
-                if check_param[p] and params[p] == "penalty":
-                    penalty = st.sidebar.selectbox(
-                        "enter penalty value",
-                        ["l2", "l1", "elasticnet"]
-                    )
-            if st.sidebar.button("Predicting"):
-                sc = SGDClassifier(random_state=0, loss=loss, penalty=penalty)
-                if not features:
-                    st.write("You have to choose some features for training")
-                elif good_target == False:
-                    st.write("Choose an appropriete target variable")
-                else:
-                    predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
-                        data, features, target, sc, cv, length)
-                    data_t = view(data, target, length,
-                                  predictions, predictions_p, y_test)
-                    tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-                                        "precision_score": [p], "recall_score": [p],
-                                        "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-                    tab.index = [""] * len(tab)
-                    st.markdown("""
-                    <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-                    """,
-                                unsafe_allow_html=True)
+                            st.sidebar.markdown(download_link(
+                                pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
-                    st.table(tab)
+            except:
+                st.warning("Choose another solver or another penalty")
 
-                    st.markdown("""
-                    <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-                    """,
-                                unsafe_allow_html=True)
-                    retention = (
-                        len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-                    churn = (
-                        len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-                    st.write("Retention rate: "+str(retention)+"%")
-                    st.write("Churn rate: "+str(churn)+"%")
+            # if st.sidebar.button("Predicting"):
+            #     lr = LogisticRegression(
+            #         random_state=0, penalty=penalty, solver=solver)
+            #     if not features:
+            #         st.write("You have to choose some features for training")
+            #     elif good_target == False:
+            #         st.write("Choose an appropriete target variable")
+            #     elif cat_encoder == False:
+            #         st.error("You have to encode some variable")
+            #     else:
+            #         predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+            #             data, features, target, lr, cv, length)
+            #         data_t = view(data, target, length,
+            #                       predictions, predictions_p, y_test)
+            #         tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+            #                             "precision_score": [p], "recall_score": [p],
+            #                             "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+            #         tab.index = [""] * len(tab)
+            #         st.markdown("""
+            #         <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+            #         """,
+            #                     unsafe_allow_html=True)
 
-                    st.sidebar.markdown(download_link(
-                        pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+            #         st.table(tab)
+
+            #         st.markdown("""
+            #         <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+            #         """,
+            #                     unsafe_allow_html=True)
+            #         retention = (
+            #             len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+            #         churn = (
+            #             len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+            #         st.write("Retention rate: "+str(retention)+"%")
+            #         st.write("Churn rate: "+str(churn)+"%")
+            #         # st.sidebar.markdown(download_link(
+            #         #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+            #         st.sidebar.markdown(download_link(
+            #             pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
+
+        # if model == "SgdClassifier":
+        #     params = ["loss", "penalty"]
+        #     check_param = [st.sidebar.checkbox(
+        #         param, key=param) for param in params]
+        #     loss, penalty = "hinge", "l2"
+        #     for p in range(len(params)):
+        #         if check_param[p] and params[p] == "loss":
+        #             loss = st.sidebar.selectbox(
+        #                 "enter hinge value",
+        #                 ["hinge", "log", "modified_huber",
+        #                  "squared_hinge", "perceptron"]
+        #             )
+        #         if check_param[p] and params[p] == "penalty":
+        #             penalty = st.sidebar.selectbox(
+        #                 "enter penalty value",
+        #                 ["l2", "l1", "elasticnet"]
+        #             )
+        #     if st.sidebar.button("Predicting"):
+        #         sc = SGDClassifier(random_state=0, loss=loss, penalty=penalty)
+        #         if not features:
+        #             st.write("You have to choose some features for training")
+        #         elif good_target == False:
+        #             st.write("Choose an appropriete target variable")
+        #         else:
+        #             predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
+        #                 data, features, target, sc, cv, length)
+        #             data_t = view(data, target, length,
+        #                           predictions, predictions_p, y_test)
+        #             tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
+        #                                 "precision_score": [p], "recall_score": [p],
+        #                                 "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
+        #             tab.index = [""] * len(tab)
+        #             st.markdown("""
+        #             <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
+        #             """,
+        #                         unsafe_allow_html=True)
+
+        #             st.table(tab)
+
+        #             st.markdown("""
+        #             <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
+        #             """,
+        #                         unsafe_allow_html=True)
+        #             retention = (
+        #                 len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
+        #             churn = (
+        #                 len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
+        #             st.write("Retention rate: "+str(retention)+"%")
+        #             st.write("Churn rate: "+str(churn)+"%")
+
+        #             st.sidebar.markdown(download_link(
+        #                 pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
         if model == "SVClassification":
             params = ["kernel", "degree"]
@@ -799,8 +845,6 @@ def evaluation(model, X_train, y_train, X_test, y_test, cv):
     ypred = model.predict(X_test)
     st.write("Correlation Matrix")
     st.write(confusion_matrix(y_test, ypred))
-    st.write("Classification Repport")
-    st.write(classification_report(y_test, ypred))
 
     N, train_scores, test_scores = learning_curve(model, X_train, y_train, train_sizes=np.linspace(0.1, 1, 10),
                                                   cv=10)
