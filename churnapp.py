@@ -332,7 +332,12 @@ def main_content():
 
             cat_variable = data.select_dtypes(
                 'object').columns.to_list()
+
             if len(cat_variable) != 0:
+                for cat in cat_variable:
+                    if len(data[cat].unique()) > 50:
+                        st.sidebar.warning(
+                            "Too much unique values in "+cat+". Encoding may take a long time !!")
                 cat_encoder = False
                 st.sidebar.write(f"{cat_variable} are categorical data")
                 choice = st.sidebar.selectbox(f"Would you like to create dummies for them ?", [
