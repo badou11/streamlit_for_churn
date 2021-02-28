@@ -162,6 +162,7 @@ def target_info(data, target):
 
 def core(data, features, target, model, cv, length):
 
+    features = data.columns.to_list()
     trainset, testset = train_test_split(
         data, train_size=length, random_state=0)
     X_train, y_train = preprocessing(trainset, target)
@@ -213,7 +214,7 @@ def main_content():
         """, unsafe_allow_html=True)
 
     st.markdown("""
-        Hello world :smiley:. You can see the project here--> <a href="https://github.com/badou11/streamlit_for_churn"/> Link</a>
+        Hello :smiley:. You can see the project here--> <a href="https://github.com/badou11/streamlit_for_churn"/> Link</a> and the notebook <a href="https://github.com/destoone/Data_projects/blob/master/TP-Churn.ipynb"/> here</a>
         """,
                 unsafe_allow_html=True)
 
