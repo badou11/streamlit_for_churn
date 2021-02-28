@@ -56,7 +56,7 @@ def download_link(object_to_download, download_filename, download_link_text):
     # some strings <-> bytes conversions necessary here
     b64 = base64.b64encode(object_to_download.encode()).decode()
 
-    return f'<a style="font-size: 10px; color: purple; text-decoration: none;" href="data:file/txt;base64,{b64}" download="{download_filename}">{download_link_text}</a>'
+    return f'<a style="font-size: 20px; color: purple; text-decoration: none;" href="data:file/txt;base64,{b64}" download="{download_filename}">{download_link_text}</a>'
 
 
 def customized_plot(type_of_plot, columns, data, target, bins=0):
@@ -162,6 +162,7 @@ def target_info(data, target):
 
 def core(data, features, target, model, cv, length):
 
+    data = data.dropna()
     features = data.columns.to_list()
     trainset, testset = train_test_split(
         data, train_size=length, random_state=0)
@@ -307,21 +308,21 @@ def main_content():
             """,
                             unsafe_allow_html=True)
 
-        if st.sidebar.checkbox("Check null values"):
-            st.write(data.isna().sum())
-            null_vals = [i for i in data.isna().sum()]
-            if np.sum(null_vals) != 0:
-                st.write(
-                    f"There is {np.sum(null_vals)} variable with null values")
-                choice = st.sidebar.selectbox("How do you want to remove NaN values?", [
-                                              'Dropna', 'Replace by Mean', 'Drop Columns with NaN'])
-                missing_val_count_by_column = (data.isnull().sum())
-                col_with_NaN = missing_val_count_by_column[missing_val_count_by_column > 0].index.to_list(
-                )
+        # if st.sidebar.checkbox("Check null values"):
+        #     st.write(data.isna().sum())
+        #     null_vals = [i for i in data.isna().sum()]
+        #     if np.sum(null_vals) != 0:
+        #         st.write(
+        #             f"There is {np.sum(null_vals)} null values")
+        #         choice = st.sidebar.selectbox("How do you want to remove NaN values?", [
+        #                                       'Choose an option', 'Dropna', 'Replace by Mean', 'Drop Columns with NaN'])
+        #         missing_val_count_by_column = (data.isnull().sum())
+        #         col_with_NaN = missing_val_count_by_column[missing_val_count_by_column > 0].index.to_list(
+        #         )
 
-                deal_with_NaN(data, col_with_NaN)
-            else:
-                st.write("Hum !! You are Lucky :smiley:")
+        #         data = deal_with_NaN(data, choice, col_with_NaN)
+        #     else:
+        #         st.write("Hum !! You are Lucky :smiley:")
 
         features = st.sidebar.multiselect(
             "Features", data.drop(target, axis=1).columns)
@@ -664,100 +665,6 @@ def main_content():
             except:
                 st.warning("Choose another solver or another penalty")
 
-            # if st.sidebar.button("Predicting"):
-            #     lr = LogisticRegression(
-            #         random_state=0, penalty=penalty, solver=solver)
-            #     if not features:
-            #         st.write("You have to choose some features for training")
-            #     elif good_target == False:
-            #         st.write("Choose an appropriete target variable")
-            #     elif cat_encoder == False:
-            #         st.error("You have to encode some variable")
-            #     else:
-            #         predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
-            #             data, features, target, lr, cv, length)
-            #         data_t = view(data, target, length,
-            #                       predictions, predictions_p, y_test)
-            #         tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-            #                             "precision_score": [p], "recall_score": [p],
-            #                             "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-            #         tab.index = [""] * len(tab)
-            #         st.markdown("""
-            #         <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-            #         """,
-            #                     unsafe_allow_html=True)
-
-            #         st.table(tab)
-
-            #         st.markdown("""
-            #         <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-            #         """,
-            #                     unsafe_allow_html=True)
-            #         retention = (
-            #             len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-            #         churn = (
-            #             len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-            #         st.write("Retention rate: "+str(retention)+"%")
-            #         st.write("Churn rate: "+str(churn)+"%")
-            #         # st.sidebar.markdown(download_link(
-            #         #     data_t, "result.csv", "Download predicting results"), unsafe_allow_html=True)
-
-            #         st.sidebar.markdown(download_link(
-            #             pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
-
-        # if model == "SgdClassifier":
-        #     params = ["loss", "penalty"]
-        #     check_param = [st.sidebar.checkbox(
-        #         param, key=param) for param in params]
-        #     loss, penalty = "hinge", "l2"
-        #     for p in range(len(params)):
-        #         if check_param[p] and params[p] == "loss":
-        #             loss = st.sidebar.selectbox(
-        #                 "enter hinge value",
-        #                 ["hinge", "log", "modified_huber",
-        #                  "squared_hinge", "perceptron"]
-        #             )
-        #         if check_param[p] and params[p] == "penalty":
-        #             penalty = st.sidebar.selectbox(
-        #                 "enter penalty value",
-        #                 ["l2", "l1", "elasticnet"]
-        #             )
-        #     if st.sidebar.button("Predicting"):
-        #         sc = SGDClassifier(random_state=0, loss=loss, penalty=penalty)
-        #         if not features:
-        #             st.write("You have to choose some features for training")
-        #         elif good_target == False:
-        #             st.write("Choose an appropriete target variable")
-        #         else:
-        #             predictions, predictions_p, accuracy, f_score, p, r, ras, accuracy_cv, y_test, X_test = core(
-        #                 data, features, target, sc, cv, length)
-        #             data_t = view(data, target, length,
-        #                           predictions, predictions_p, y_test)
-        #             tab = pd.DataFrame({"accuracy": [accuracy], "f1_score": [f_score],
-        #                                 "precision_score": [p], "recall_score": [p],
-        #                                 "roc_auc_score": [ras], "accuracy_cross_validation": [accuracy_cv]})
-        #             tab.index = [""] * len(tab)
-        #             st.markdown("""
-        #             <h2 style="font-size: 15px; text-decoration-line: underline;">Differents metrics</h2>
-        #             """,
-        #                         unsafe_allow_html=True)
-
-        #             st.table(tab)
-
-        #             st.markdown("""
-        #             <h2 style="font-size: 15px; text-decoration-line: underline;">Calcul of your retention and churn rate</h2>
-        #             """,
-        #                         unsafe_allow_html=True)
-        #             retention = (
-        #                 len(data_t.loc[data_t["predictions"] == 0, "predictions"])/len(data_t))*100
-        #             churn = (
-        #                 len(data_t.loc[data_t["predictions"] == 1, "predictions"])/len(data_t))*100
-        #             st.write("Retention rate: "+str(retention)+"%")
-        #             st.write("Churn rate: "+str(churn)+"%")
-
-        #             st.sidebar.markdown(download_link(
-        #                 pd.concat([X_test, pd.DataFrame({"Predictions": predictions})], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
-
         if model == "SVClassification":
             params = ["kernel", "degree"]
             check_param = [st.sidebar.checkbox(
@@ -814,9 +721,11 @@ def main_content():
                         pd.concat([X_test.drop(columns=target), data_t["predictions"]], axis=1), "result.csv", "Download predicting results"), unsafe_allow_html=True)
 
 
-def deal_with_NaN(data, col_with_NaN):
+def deal_with_NaN(data, choice, col_with_NaN):
     if choice == "Dropna":
-        return data.dropna(axis=0)
+        data = data.dropna(axis=0)
+        st.write(data.isna().sum())
+        return data
 
     if choice == "Replace by Mean":
         imputer = SimpleImputer(strategy='mean')
